@@ -8,13 +8,14 @@
  * These headers are required by modern web browsers to enable 
  * Cross-Origin Isolation, which in turn unlocks the use of `SharedArrayBuffer`.
  * `SharedArrayBuffer` is necessary for WebAssembly threads to function correctly.
+ * alternative: see https://github.com/gzuidhof/coi-serviceworker
  */
 import { serve } from "bun";
 import { join } from "path";
 
-const PORT = 8000;
+const PORT = Bun.env.PORT || 3000;
 
-serve({
+Bun.serve({
   port: PORT,
   async fetch(req) {
     const url = new URL(req.url);

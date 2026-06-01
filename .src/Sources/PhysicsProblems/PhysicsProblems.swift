@@ -8,27 +8,26 @@ typealias DedicatedTaskExecutor = JavaScriptEventLoop
 @main
 struct PhysicsProblems {
 	static func main() throws {
-		DedicatedTaskExecutor.installGlobalExecutor()
+		JavaScriptEventLoop.installGlobalExecutor()
+		let useDedicatedWorker = !(JSObject.global.disableDedicatedWorker.boolean ?? false)
 		
 		print("Hello, world!")
 		Task {
-#if wasi_pthread
-//			let executor = try await WebWorkerDedicatedExecutor()
-			let executor = try await WebWorkerTaskExecutor(numberOfThreads: 1)
+			if useDedicatedWorker {
+				print("task")
+				print("")
+			}
 			
-			defer { executor.terminate() }
-#endif
-			print("task")
-			await asdf()
+			try await asdf()
 			print("tasks")
 		}
 		print("done")
     }
 }
 
-
-nonisolated func asdf() async {
+func asdf() async throws {
 	print("asdfasdf")
+	_ = try await WebWorkerTaskExecutor(numberOfThreads: 2)
 }
 
 
