@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Physics Problems</title>
+</head>
+<body>
+  <h1>Physics Problems</h1>
+  <p>Welcome to the Physics Problems web page.</p>
+  <script async type="module">
+    import './polyfill.js';
+    import { instantiate } from './.build/plugins/PackageToJS/outputs/Package/instantiate.js';
+    import { defaultBrowserSetup, createDefaultWorkerFactory } from './.build/plugins/PackageToJS/outputs/Package/platforms/browser.js';
+
+    const preludeScriptUrl = new URL('./polyfill.js', window.location.href).href;
+    const module = fetch(new URL('./.build/plugins/PackageToJS/outputs/Package/PhysicsProblems.wasm', window.location.href));
+
+    const instantiateOptions = await defaultBrowserSetup({
+        module,
+        spawnWorker: createDefaultWorkerFactory(preludeScriptUrl)
+    });
+    await instantiate(instantiateOptions);
+  </script>
+  <!-- <script type="module">
+    import { init } from "./.build/plugins/PackageToJS/outputs/Package/index.js";
+    init();
+  </script> -->
+</body>
+</html>
