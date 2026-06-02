@@ -1,10 +1,11 @@
-import type { InstantiateOptions, ModuleSource } from "../instantiate.js"
+import type { InstantiateOptions, ModuleSource, Imports } from "../instantiate.js"
 
 export function defaultBrowserSetup(options: {
     module: ModuleSource,
     args?: string[],
     onStdoutLine?: (line: string) => void,
     onStderrLine?: (line: string) => void,
+    getImports: () => Imports,
     spawnWorker?: (module: WebAssembly.Module, memory: WebAssembly.Memory, startArg: any) => Worker,
 }): Promise<InstantiateOptions>
 

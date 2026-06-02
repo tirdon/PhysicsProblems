@@ -7,6 +7,10 @@ export type Options = {
      * If not provided, the module will be fetched from the default path.
      */
     module?: ModuleSource
+    /**
+     * The imports to use for the module
+     */
+    getImports: () => Imports
 }
 
 /**

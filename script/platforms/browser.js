@@ -106,6 +106,7 @@ export async function defaultBrowserSetup(options) {
 
     return {
         module: options.module,
+        getImports() { return options.getImports() },
         wasi: Object.assign(wasi, {
             setInstance(instance) {
                 wasi.inst = instance;

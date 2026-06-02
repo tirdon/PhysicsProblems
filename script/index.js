@@ -7,6 +7,8 @@ import { defaultBrowserSetup , createDefaultWorkerFactory as createDefaultWorker
 async function initBrowser(_options) {
     /** @type {import('./index.d').Options} */
     const options = _options || {
+        /** @returns {import('./instantiate.d').Imports} */
+        getImports() { (() => { throw new Error("No imports provided") })() }
     };
     let module = options.module;
     if (!module) {
@@ -14,6 +16,7 @@ async function initBrowser(_options) {
     }
     const instantiateOptions = await defaultBrowserSetup({
         module,
+        getImports: () => options.getImports(),
         spawnWorker: createDefaultWorkerFactoryForBrowser()
     })
     return await instantiate(instantiateOptions);

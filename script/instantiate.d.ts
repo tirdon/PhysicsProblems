@@ -1,7 +1,7 @@
 import type { SwiftRuntimeThreadChannel } from "./runtime.js";
 
-export type Imports = {}
-export type Exports = {}
+export type { Imports, Exports } from "./bridge-js.js";
+import type { Imports, Exports } from "./bridge-js.js";
 
 /**
  * The path to the WebAssembly module relative to the root of the package
@@ -64,6 +64,14 @@ export type InstantiateOptions = {
      * The WebAssembly module to instantiate
      */
     module: ModuleSource,
+    /**
+     * The function to get the imports provided by the embedder
+     */
+    getImports: (importsContext: {
+        getInstance: () => WebAssembly.Instance | null,
+        getExports: () => Exports | null,
+        _swift: SwiftRuntime,
+    }) => Imports,
     /**
      * The WASI implementation to use
      */

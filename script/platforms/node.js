@@ -133,6 +133,7 @@ export async function defaultNodeSetup(options = {}) {
 
     return {
         module,
+        getImports() { return {} },
         wasi: Object.assign(wasi, {
             setInstance(instance) {
                 wasi.inst = instance;
