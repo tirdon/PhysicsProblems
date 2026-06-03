@@ -23,11 +23,11 @@ public struct Color: Equatable, Sendable {
     }
 	
 	public var darker: Color {
-		Color(r: max(0, r * 0.9), g: max(0, g * 0.9), b: max(0, b * 0.9), a: a)
+		Color(r: max(0, r * 0.8), g: max(0, g * 0.8), b: max(0, b * 0.8), a: a)
 	}
 	
 	public var lighter: Color {
-		Color(r: min(1, r * 1.1), g: min(1, g * 1.1), b: min(1, b * 1.1), a: a)
+		Color(r: min(1, r * 1.2), g: min(1, g * 1.2), b: min(1, b * 1.2), a: a)
 	}
 
     // MARK: Named Presets
