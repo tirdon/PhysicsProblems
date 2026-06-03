@@ -9,14 +9,14 @@ import Foundation
     let pivot = Circle()
     pivot.transform = TransformComponent(position: .zero)
     pivot.vector = VectorComponent(vector: .circle(radius: 0.035))
-    pivot.style = RenderStyleComponent(color: .pivot)
+    pivot.style = RenderStyleComponent(color: .gray)
     scene.add(pivot)
 
     let bob = Circle()
     let bobPosition = SIMD3<Float>(-0.72, -0.86, 0)
     bob.transform = TransformComponent(position: bobPosition)
     bob.vector = VectorComponent(vector: .circle(radius: 0.12))
-    bob.style = RenderStyleComponent(color: .bob, hoverColor: .bobHighlight)
+    bob.style = RenderStyleComponent(color: .blue, hoverColor: .cyan)
     bob.interaction = InteractionComponent(
         hoverable: true,
         draggable: true,
@@ -31,18 +31,18 @@ import Foundation
         end: .entity(bob),
         width: 0.018
     ))
-    string.style = RenderStyleComponent(color: .string)
+    string.style = RenderStyleComponent(color: .red)
     scene.add(string)
 
     let gravity = Arrow()
     gravity.vector = VectorComponent(vector: .arrow(
         start: .entity(bob),
-        end: .entity(bob, direction: .down, offset: 0.43),
+        end: .entity(bob, direction: .bottom, offset: 0.43),
         shaftWidth: 0.025,
         headLength: 0.12,
         headWidth: 0.11
     ))
-    gravity.style = RenderStyleComponent(color: .gravity, opacity: 0)
+    gravity.style = RenderStyleComponent(color: .green, opacity: 0)
     gravity.revealOnHover = RevealOnHoverComponent(trigger: bob)
     scene.add(gravity)
 
@@ -91,19 +91,19 @@ import Foundation
     let bobPos = SIMD3<Float>(-0.72, -0.86, 0)
     bob.transform = TransformComponent(position: bobPos)
     bob.vector = VectorComponent(vector: .circle(radius: 0.12))
-    bob.style = RenderStyleComponent(color: .bob, hoverColor: .bobHighlight)
+    bob.style = RenderStyleComponent(color: .blue, hoverColor: .cyan)
     bob.interaction = InteractionComponent(hoverable: true, draggable: true, pauseAnimationOnHover: true, hitPadding: 0.05)
     scene.add(bob)
 
     let gravity = Arrow()
-    gravity.vector = VectorComponent(vector: .arrow(start: .entity(bob), end: .entity(bob, direction: .down, offset: 0.43), shaftWidth: 0.025, headLength: 0.12, headWidth: 0.11))
-    gravity.style = RenderStyleComponent(color: .gravity, opacity: 0)
+    gravity.vector = VectorComponent(vector: .arrow(start: .entity(bob), end: .entity(bob, direction: .bottom, offset: 0.43), shaftWidth: 0.025, headLength: 0.12, headWidth: 0.11))
+    gravity.style = RenderStyleComponent(color: .green, opacity: 0)
     gravity.revealOnHover = RevealOnHoverComponent(trigger: bob)
     scene.add(gravity)
 
     let tension = Arrow()
     tension.vector = VectorComponent(vector: .arrow(start: .entity(bob), end: .point(.zero), shaftWidth: 0.025, headLength: 0.12, headWidth: 0.11))
-    tension.style = RenderStyleComponent(color: .tension, opacity: 0)
+    tension.style = RenderStyleComponent(color: .orange, opacity: 0)
     tension.revealOnHover = RevealOnHoverComponent(trigger: bob)
     scene.add(tension)
 
