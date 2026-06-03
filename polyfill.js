@@ -8,7 +8,3 @@ crypto.getRandomValues = function(array) {
   }
   return originalGetRandomValues(array);
 };
-
-export function setupOptions(options) {
-  return options;
-}

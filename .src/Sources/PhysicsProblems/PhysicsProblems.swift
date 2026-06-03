@@ -1,33 +1,26 @@
 import JavaScriptEventLoop
 import JavaScriptKit
 
-// swift package --package-path .src --scratch-path .build --swift-sdk 6.3-RELEASE-wasm32-unknown-wasip1-threads --allow-writing-to-directory script  js --use-cdn  --output script
+// swift package --package-path .src --scratch-path .build --swift-sdk 6.3-RELEASE-wasm32-unknown-wasip1-threads --allow-writing-to-directory script js --use-cdn --output script
 
 @main
 struct PhysicsProblems {
-	static func main() throws {
-		JavaScriptEventLoop.installGlobalExecutor()
-//		let s = JSSending(.init())
+    nonisolated(unsafe) private static var app: BrowserSceneApp?
+
+    static func main() {
+        JavaScriptEventLoop.installGlobalExecutor()
+
+        let sceneApp = BrowserSceneApp()
+        app = sceneApp
 		
-		
-		print("Hello, world!")
-		Task {
-			print("task")
-			print("")
-			
-			try await asdf()
-			print("tasks")
-		}
-		print("done")
+		print(SIMD3<Int32>.zero &+ SIMD3<Int32>([1,2,3]))
+
+        Task {
+            do throws(JSException) {
+                try await sceneApp.start()
+            } catch {
+				_ = JSObject.global.console.error("Failed to start PhysicsProblems:", error.thrownValue)
+            }
+        }
     }
-}
-
-func asdf() async throws {
-	print("asdfasdf")
-}
-
-//@_expose(wasm, "add")
-@JS
-func add(_ obj: JSObject) -> Int {
-	10
 }

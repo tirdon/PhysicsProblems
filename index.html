@@ -4,31 +4,29 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Physics Problems</title>
+  <link rel="stylesheet" href="index.css">
 </head>
 <body>
   <main>
     <h1>Physics Problems</h1>
     <p>Simple Pendulum — compute period T = 2π√(L / g)</p>
+    <div class="canvas-container">
+      <canvas id="main-canvas" width="400" height="400"></canvas>
+    </div>
   </main>
 
   <script async type="module">
     import './polyfill.js';
-    import { instantiate } from './script/instantiate.js';
-    import { defaultBrowserSetup, createDefaultWorkerFactory } from './script/platforms/browser.js';
+    import { init } from './script/index.js';
 
-    const preludeScriptUrl = new URL('./polyfill.js', window.location.href).href;
     const module = fetch(new URL('./script/PhysicsProblems.wasm', window.location.href));
 
-    const instantiateOptions = await defaultBrowserSetup({
-        module,
-        spawnWorker: createDefaultWorkerFactory(preludeScriptUrl)
+    await init({
+      module,
+      getImports() {
+        return {};
+      }
     });
-    const { exports } = await instantiate(instantiateOptions);
-
-    window.exports = exports;
-    
-    // import { init } from './script/index.js';
-    // await init();
   </script>
 </body>
 </html>

@@ -211,10 +211,6 @@ export async function createInstantiator(options, swift) {
         createExports: (instance) => {
             const js = swift.memory.heap;
             const exports = {
-                add: function bjs_add(obj) {
-                    const ret = instance.exports.bjs_add(swift.memory.retain(obj));
-                    return ret;
-                },
             };
             _exports = exports;
             return exports;

@@ -5,7 +5,6 @@
 // `swift package bridge-js`.
 
 export type Exports = {
-    add(obj: any): number;
 }
 export type Imports = {
 }
