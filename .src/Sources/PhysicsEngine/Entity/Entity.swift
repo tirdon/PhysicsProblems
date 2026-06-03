@@ -12,7 +12,9 @@ open class Entity: Hashable, Identifiable {
 	public let id: UUID = UUID()
 	public var components = ComponentSet()
 
-	public init() {}
+	public init() {
+		self.transform = TransformComponent(position: .zero)
+	}
 
 	// MARK: Component Accessors
 	public var transform: TransformComponent? {

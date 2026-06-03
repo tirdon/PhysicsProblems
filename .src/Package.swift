@@ -6,6 +6,7 @@ import PackageDescription
 let package = Package(
     name: "PhysicsProblems",
 	platforms: [.macOS(.v26)],
+	products: [.library(name: "PhysicsEngine", targets: ["PhysicsEngine"])],
 	dependencies: [.package(url: "https://github.com/swiftwasm/JavaScriptKit.git", branch: "main" )],
     targets: [
 		.target(name: "PhysicsEngine"),

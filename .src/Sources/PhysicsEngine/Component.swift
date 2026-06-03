@@ -43,11 +43,11 @@ public struct ComponentSet {
 
 public struct TransformComponent: Component {
 	public var position: SIMD3<Float>
-	public var rotation: Float
+	public var orientation: SIMD4<Float>
 
-	public init(position: SIMD3<Float> = .zero, rotation: Float = 0) {
+	public init(position: SIMD3<Float> = .zero, orientation: SIMD4<Float> = SIMD4<Float>(0, 0, 0, 1)) {
 		self.position = position
-		self.rotation = rotation
+		self.orientation = orientation
 	}
 }
 

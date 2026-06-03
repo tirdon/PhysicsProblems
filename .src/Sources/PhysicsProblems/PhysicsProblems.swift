@@ -19,7 +19,6 @@ struct PhysicsProblems {
                 scene.registerSystem(PendulumAnimationSystem())
 
 				let circle = Pendulum()
-                circle.transform = TransformComponent(position: .zero)
                 scene.add(circle)
 
                 scene.play(circle.shift(1.i + 2.j))
@@ -28,7 +27,7 @@ struct PhysicsProblems {
                 
                 circle.pendulumAnimation = PendulumAnimationComponent(
 					pivot: .up,
-                    length: 1.0,
+                    length: 2.0,
                     baseAngle: 0,
                     amplitude: 0.28,
                     period: 2.4

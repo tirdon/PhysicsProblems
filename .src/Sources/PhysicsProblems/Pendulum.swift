@@ -11,7 +11,7 @@ import Foundation
 class Pendulum: Entity {
 	override public init() {
 		super.init()
-		self.components[VectorComponent.self] = VectorComponent(vector: .circle(radius: 0.12))
+		self.components[VectorComponent.self] = VectorComponent(vector: .circle(radius: 0.25))
 		self.components[RenderStyleComponent.self] = RenderStyleComponent(color: .bob)
 	}
 }
