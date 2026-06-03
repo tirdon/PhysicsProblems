@@ -9,7 +9,26 @@ import Foundation
 
 // MARK: - System Protocol
 @MainActor public protocol System {
+	init()
 	func update(context: SceneUpdateContext)
+}
+
+public struct AnySystem: Hashable {
+	public let id: ObjectIdentifier
+	public let system: any System
+
+	public init<T: System>(_ system: T) {
+		self.id = ObjectIdentifier(T.self)
+		self.system = system
+	}
+
+	public static func == (lhs: AnySystem, rhs: AnySystem) -> Bool {
+		return lhs.id == rhs.id
+	}
+
+	public func hash(into hasher: inout Hasher) {
+		hasher.combine(id)
+	}
 }
 
 public struct SceneUpdateContext {
@@ -25,7 +44,7 @@ public struct SceneUpdateContext {
 // MARK: - Built-in Systems
 
 public class PhysicsSystem: System {
-	public init() {}
+	required public init() {}
 
 	public func update(context: SceneUpdateContext) {
 		// Placeholder for physics simulation

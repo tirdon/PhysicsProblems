@@ -9,9 +9,10 @@ import Foundation
 
 @MainActor public class SceneWorld {
 	private(set) public var entities: [Entity] = []
-	private var systems: [System] = []
+	private var systems: Set<AnySystem> = []
 
 	public private(set) var viewportId: String?
+	public var size: SIMD2<Float> = .init(10, 10)
 	public private(set) var hoveredEntity: Entity?
 	public private(set) var draggedEntity: Entity?
 	private var dragOffset: SIMD3<Float> = .zero
@@ -24,6 +25,11 @@ import Foundation
 	private var animationQueue: [AnimationClip] = []
 	private var currentClip: AnimationClipState?
 
+	private var waitContinuations: [CheckedContinuation<Void, Never>] = []
+	
+	private var pausedSystemTimers: [ObjectIdentifier: Float] = [:]
+	private var pauseContinuations: [ObjectIdentifier: [CheckedContinuation<Void, Never>]] = [:]
+
 	public init() {}
 
 	// MARK: - Entity Management
@@ -34,8 +40,8 @@ import Foundation
 
 	// MARK: - System Registration
 
-	public func registerSystem(_ system: some System) {
-		self.systems.append(system)
+	public func registerSystem<T: System>(_ systemType: T.Type) {
+		self.systems.insert(AnySystem(T()))
 	}
 
 	// MARK: - Query
@@ -44,12 +50,45 @@ import Foundation
 		self.entities.filter(query.predicate)
 	}
 
+	// MARK: - System Control
+
+	public func pause<T: System>(system: T.Type, for duration: Float = 1) async {
+		let id = ObjectIdentifier(T.self)
+		pausedSystemTimers[id] = (pausedSystemTimers[id] ?? 0) + duration
+		if duration <= 0 { return }
+		
+		await withCheckedContinuation { continuation in
+			pauseContinuations[id, default: []].append(continuation)
+		}
+	}
+
 	// MARK: - Update
 
 	public func update(deltaTime: Float) {
 		let context = SceneUpdateContext(scene: self, deltaTime: deltaTime)
-		for system in self.systems {
-			system.update(context: context)
+		
+		var finishedPauses: [ObjectIdentifier] = []
+		for (id, time) in pausedSystemTimers {
+			let newTime = time - deltaTime
+			if newTime <= 0 {
+				finishedPauses.append(id)
+			} else {
+				pausedSystemTimers[id] = newTime
+			}
+		}
+		
+		for id in finishedPauses {
+			pausedSystemTimers.removeValue(forKey: id)
+			if let continuations = pauseContinuations.removeValue(forKey: id) {
+				for cont in continuations {
+					cont.resume()
+				}
+			}
+		}
+
+		for systemWrapper in self.systems {
+			if pausedSystemTimers[systemWrapper.id] != nil { continue }
+			systemWrapper.system.update(context: context)
 		}
 	}
 
@@ -58,8 +97,6 @@ import Foundation
 	public func play(_ clip: AnimationClip) {
 		animationQueue.append(clip)
 	}
-
-	private var waitContinuations: [CheckedContinuation<Void, Never>] = []
 
 	public func wait(second: Float = 1) async {
 		if second > 0 {
@@ -81,7 +118,7 @@ import Foundation
 		// If no current clip, dequeue next
 		if currentClip == nil, !animationQueue.isEmpty {
 			let clip = animationQueue.removeFirst()
-			clip.begin()
+			clip.begin(in: self)
 			currentClip = AnimationClipState(
 				clip: clip,
 				elapsed: 0

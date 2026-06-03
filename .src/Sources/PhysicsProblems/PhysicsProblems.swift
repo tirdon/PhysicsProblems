@@ -16,17 +16,17 @@ struct PhysicsProblems {
         JavaScriptEventLoop.installGlobalExecutor()
         Task {
             let engine = Engine { scene in
-                scene.registerSystem(PendulumAnimationSystem())
+                scene.registerSystem(PendulumAnimationSystem.self)
 
 				let circle = Pendulum()
                 scene.add(circle)
 
                 scene.play(circle.shift(1.i + 2.j))
+				
                 scene.play(circle.move(to: .origin))
                 await scene.wait()
                 
-                circle.pendulumAnimation = PendulumAnimationComponent(
-					pivot: .up,
+                circle.pendulumAnimation = PendulumPhysicsComponent(
                     length: 2.0,
                     baseAngle: 0,
                     amplitude: 0.28,
@@ -34,18 +34,12 @@ struct PhysicsProblems {
                 )
 				
 				circle.interaction = InteractionComponent(
-					hoverable: true, draggable: true, pauseAnimationOnHover: true,
-					onDragEnd: { entity in
-						guard var animation = entity.pendulumAnimation,
-							  let position = entity.transform?.position else { return }
-						let relative = position - animation.pivot
-						animation.length = max(relative.length, 0.2)
-						animation.baseAngle = atan2(relative.x, -relative.y)
-						animation.elapsed = 0
-						entity.pendulumAnimation = animation
-					}
+					hoverable: true, draggable: true, pauseAnimationOnHover: true
 				)
-				circle.components[PhysicsBodyComponent.self] = PhysicsBodyComponent(shape: .circle(radius: 0.12))
+				
+				await scene.wait(second: 5)
+				await scene.pause(system: PendulumAnimationSystem.self)
+				scene.play(circle.edge(to: .bottom))
             }
 
             // Set up JS renderer and animation loop

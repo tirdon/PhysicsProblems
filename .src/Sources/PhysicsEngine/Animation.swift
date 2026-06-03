@@ -14,13 +14,13 @@ public struct Keyframe<Value> {
 	}
 }
 
-public protocol AnimationTrack {
+@MainActor public protocol AnimationTrack {
 	var duration: Float { get }
-	func begin()
+	func begin(in scene: SceneWorld)
 	func apply(at time: Float)
 }
 
-public class KeyframeTrack<Value>: AnimationTrack {
+@MainActor public class KeyframeTrack<Value>: AnimationTrack {
 	public let entity: Entity
 	public let duration: Float
 	public var keyframes: [Keyframe<Value>]
@@ -35,9 +35,9 @@ public class KeyframeTrack<Value>: AnimationTrack {
 		self.applyValue = applyValue
 	}
 
-	public func begin() {}
+	@MainActor public func begin(in scene: SceneWorld) {}
 
-	public func apply(at time: Float) {
+	@MainActor public func apply(at time: Float) {
 		guard !keyframes.isEmpty else { return }
 		if keyframes.count == 1 {
 			applyValue(entity, keyframes[0].value)
@@ -71,28 +71,24 @@ public class KeyframeTrack<Value>: AnimationTrack {
 	}
 }
 
-public class MoveTrack: AnimationTrack {
+@MainActor public class TranslationTrack: AnimationTrack {
 	public let entity: Entity
 	public let duration: Float
-	public let target: SIMD3<Float>
-	public let isRelative: Bool
-	private var startPosition: SIMD3<Float> = .zero
+	public var startPosition: SIMD3<Float> = .zero
+	public var endPosition: SIMD3<Float> = .zero
 
-	public init(entity: Entity, target: SIMD3<Float>, isRelative: Bool, duration: Float) {
+	public init(entity: Entity, duration: Float) {
 		self.entity = entity
-		self.target = target
-		self.isRelative = isRelative
 		self.duration = duration
 	}
 
-	public func begin() {
+	@MainActor public func begin(in scene: SceneWorld) {
 		startPosition = entity.transform?.position ?? .zero
 	}
 
-	public func apply(at time: Float) {
+	@MainActor public func apply(at time: Float) {
 		let t = duration > 0 ? clamp(time / duration, min: 0, max: 1) : 1
 		let easedT = t * t * (3 - 2 * t)
-		let endPosition = isRelative ? startPosition + target : target
 		let currentPos = startPosition + (endPosition - startPosition) * easedT
 		
 		if var transform = entity.transform {
@@ -104,18 +100,34 @@ public class MoveTrack: AnimationTrack {
 	}
 }
 
-public class DelayTrack: AnimationTrack {
+@MainActor public class MoveTrack: TranslationTrack {
+	public let target: SIMD3<Float>
+	public let isRelative: Bool
+
+	public init(entity: Entity, target: SIMD3<Float>, isRelative: Bool, duration: Float) {
+		self.target = target
+		self.isRelative = isRelative
+		super.init(entity: entity, duration: duration)
+	}
+
+	@MainActor public override func begin(in scene: SceneWorld) {
+		super.begin(in: scene)
+		endPosition = isRelative ? startPosition + target : target
+	}
+}
+
+@MainActor public class DelayTrack: AnimationTrack {
 	public let duration: Float
 
 	public init(duration: Float) {
 		self.duration = duration
 	}
 
-	public func begin() {}
-	public func apply(at time: Float) {}
+	@MainActor public func begin(in scene: SceneWorld) {}
+	@MainActor public func apply(at time: Float) {}
 }
 
-public class AnimationClip {
+@MainActor public class AnimationClip {
 	public var tracks: [AnimationTrack] = []
 	public var duration: Float {
 		tracks.map { $0.duration }.max() ?? 0
@@ -133,15 +145,64 @@ public class AnimationClip {
 		tracks.append(track)
 	}
 
-	public func begin() {
+	@MainActor public func begin(in scene: SceneWorld) {
 		for track in tracks {
-			track.begin()
+			track.begin(in: scene)
 		}
 	}
 
-	public func apply(at time: Float) {
+	@MainActor public func apply(at time: Float) {
 		for track in tracks {
 			track.apply(at: min(time, track.duration))
 		}
+	}
+}
+
+@MainActor public class EdgeTrack: TranslationTrack {
+	public let direction: SIMD3<Float>
+	public let padding: Float
+
+	public init(entity: Entity, direction: SIMD3<Float>, padding: Float, duration: Float) {
+		self.direction = direction
+		self.padding = padding
+		super.init(entity: entity, duration: duration)
+	}
+
+	@MainActor public override func begin(in scene: SceneWorld) {
+		super.begin(in: scene)
+		
+		var w: Float = 0
+		var h: Float = 0
+		if let body = entity.components[PhysicsBodyComponent.self] {
+			switch body.shape {
+			case .circle(let radius):
+				w = radius
+				h = radius
+			case .ellipse(let major, let minor):
+				w = major
+				h = minor
+			case .rect(let width, let height):
+				w = width / 2
+				h = height / 2
+			}
+		}
+		
+		let minX = -scene.size.x / 2 + w + padding
+		let maxX = scene.size.x / 2 - w - padding
+		let minY = -scene.size.y / 2 + h + padding
+		let maxY = scene.size.y / 2 - h - padding
+		
+		var targetPos = startPosition
+		if direction.x > 0 { targetPos.x = maxX }
+		else if direction.x < 0 { targetPos.x = minX }
+		else { targetPos.x = 0 }
+		
+		if direction.y > 0 { targetPos.y = maxY }
+		else if direction.y < 0 { targetPos.y = minY }
+		else { targetPos.y = 0 }
+		
+		if direction.z > 0 { targetPos.z = 0 }
+		
+		endPosition = targetPos
 	}
 }

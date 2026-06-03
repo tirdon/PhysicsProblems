@@ -11,14 +11,14 @@ import Foundation
 
 public enum Anchor {
 	case point(SIMD3<Float>)
-	case entity(Entity, direction: SIMD3<Float> = .trailing, offset: Float = 0)
+	case entity(Entity, direction: Unit = .trailing, offset: Float = 0)
 
 	public func resolve() -> SIMD3<Float> {
 		switch self {
 		case .point(let point):
 			return point
-		case .entity(let entity, var direction, let offset):
-			direction = direction.normalized
+		case .entity(let entity, let directionUnit, let offset):
+			let direction = directionUnit.vector
 			let basePos = entity.transform?.position ?? .zero
 			var sizeOffset: SIMD3<Float> = .zero
 			if let body = entity.components[PhysicsBodyComponent.self] {
@@ -75,14 +75,24 @@ public extension SIMD3 where Scalar == Float {
 		SIMD2(x, y)
 	}
 	
-	static var up: SIMD3<Float> { .init(0, 1, 0) }
-	static var down: SIMD3<Float> { .init(0, -1, 0) }
-	static var forward: SIMD3<Float> { .init(0, 0, 1) }
-	static var backward: SIMD3<Float> { .init(0, 0, -1) }
-	static var right: SIMD3<Float> { .init(1, 0, 0) }
-	static var left: SIMD3<Float> { .init(-1, 0, 0) }
-	static var trailing: SIMD3<Float> { .init(1, 0, 0) }
-	static var leading: SIMD3<Float> { .init(-1, 0, 0) }
+	static let i: SIMD3<Float> = 1.i
+	static let j: SIMD3<Float> = 1.j
+	static let k: SIMD3<Float> = 1.k
+}
+
+public struct Unit: Sendable {
+	public let vector: SIMD3<Float>
+
+	public init(vector: SIMD3<Float>) {
+		self.vector = vector.normalized
+	}
+
+	public static let top = Unit(vector: .init(0, 1, 0))
+	public static let bottom = Unit(vector: .init(0, -1, 0))
+	public static let forward = Unit(vector: .init(0, 0, 1))
+	public static let backward = Unit(vector: .init(0, 0, -1))
+	public static let trailing = Unit(vector: .init(1, 0, 0))
+	public static let leading = Unit(vector: .init(-1, 0, 0))
 }
 
 // MARK: - Math Utilities

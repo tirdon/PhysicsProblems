@@ -11,20 +11,20 @@ import Foundation
 class Pendulum: Entity {
 	override public init() {
 		super.init()
+		self.components[PhysicsBodyComponent.self] = PhysicsBodyComponent(shape: .circle(radius: 0.26))
 		self.components[VectorComponent.self] = VectorComponent(vector: .circle(radius: 0.25))
 		self.components[RenderStyleComponent.self] = RenderStyleComponent(color: .bob)
 	}
 }
 
 public extension Entity {
-	var pendulumAnimation: PendulumAnimationComponent? {
-		get { components[PendulumAnimationComponent.self] }
-		set { components[PendulumAnimationComponent.self] = newValue }
+	var pendulumAnimation: PendulumPhysicsComponent? {
+		get { components[PendulumPhysicsComponent.self] }
+		set { components[PendulumPhysicsComponent.self] = newValue }
 	}
 }
 
-public struct PendulumAnimationComponent: Component {
-	public var pivot: SIMD3<Float>
+public struct PendulumPhysicsComponent: Component {
 	public var length: Float
 	public var baseAngle: Float
 	public var amplitude: Float
@@ -32,14 +32,12 @@ public struct PendulumAnimationComponent: Component {
 	public var elapsed: Float
 
 	public init(
-		pivot: SIMD3<Float> = .zero,
 		length: Float = 1,
 		baseAngle: Float = 0,
 		amplitude: Float = 0.28,
 		period: Float = 2.4,
 		elapsed: Float = 0
 	) {
-		self.pivot = pivot
 		self.length = length
 		self.baseAngle = baseAngle
 		self.amplitude = amplitude
@@ -55,7 +53,7 @@ public struct PendulumAnimationSystem: System {
 		let boundedDelta = clamp(context.deltaTime, min: 0, max: 0.05)
 		let scene = context.scene
 
-		for entity in scene.performQuery(.has(PendulumAnimationComponent.self)) {
+		for entity in scene.performQuery(.has(PendulumPhysicsComponent.self)) {
 			guard var animation = entity.pendulumAnimation else { continue }
 
 			if scene.draggedEntity == entity {
@@ -65,17 +63,30 @@ public struct PendulumAnimationSystem: System {
 			   entity.interaction?.pauseAnimationOnHover == true {
 				continue
 			}
+			
+			// Calculate old phase and relative position to find the implicit pivot
+			let oldPhase = sin((animation.elapsed / animation.period) * Float.pi * 2)
+			let oldAngle = animation.baseAngle + animation.amplitude * oldPhase
+			let oldRelativePos = SIMD3<Float>(
+				sin(oldAngle),
+				-cos(oldAngle),
+				0
+			) * animation.length
 
 			animation.elapsed += boundedDelta
-			let phase = sin((animation.elapsed / animation.period) * Float.pi * 2)
-			let angle = animation.baseAngle + animation.amplitude * phase
+			
+			// Calculate new phase and relative position
+			let newPhase = sin((animation.elapsed / animation.period) * Float.pi * 2)
+			let newAngle = animation.baseAngle + animation.amplitude * newPhase
+			let newRelativePos = SIMD3<Float>(
+				sin(newAngle),
+				-cos(newAngle),
+				0
+			) * animation.length
 
 			if var transform = entity.transform {
-				transform.position = animation.pivot + SIMD3<Float>(
-					sin(angle),
-					-cos(angle),
-					0
-				) * animation.length
+				let dynamicPivot = transform.position - oldRelativePos
+				transform.position = dynamicPivot + newRelativePos
 				entity.transform = transform
 			}
 
