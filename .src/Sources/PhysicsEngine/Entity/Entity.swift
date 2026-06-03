@@ -55,6 +55,29 @@ open class Entity: Hashable, Identifiable {
 	}
 }
 
+public class PathEntity: Entity {
+	public var vector: VectorComponent? {
+		get { components[VectorComponent.self] }
+		set { components[VectorComponent.self] = newValue }
+	}
+
+	public var style: RenderStyleComponent? {
+		get { components[RenderStyleComponent.self] }
+		set { components[RenderStyleComponent.self] = newValue }
+	}
+	
+	@discardableResult
+	public func color(_ color: Color) -> Self {
+		if var s = style {
+			s.color = color
+			style = s
+		} else {
+			style = RenderStyleComponent(color: color)
+		}
+		return self
+	}
+}
+
 // MARK: - EntityQuery
 public struct EntityQuery {
 	public let predicate: (Entity) -> Bool

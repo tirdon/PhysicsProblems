@@ -37,7 +37,7 @@ import Foundation
     let gravity = Arrow()
     gravity.vector = VectorComponent(vector: .arrow(
         start: .entity(bob),
-        end: .entity(bob, offset: SIMD3<Float>(0, -0.55, 0)),
+        end: .entity(bob, direction: .down, offset: 0.43),
         shaftWidth: 0.025,
         headLength: 0.12,
         headWidth: 0.11
@@ -96,7 +96,7 @@ import Foundation
     scene.add(bob)
 
     let gravity = Arrow()
-    gravity.vector = VectorComponent(vector: .arrow(start: .entity(bob), end: .entity(bob, offset: SIMD3(0, -0.55, 0)), shaftWidth: 0.025, headLength: 0.12, headWidth: 0.11))
+    gravity.vector = VectorComponent(vector: .arrow(start: .entity(bob), end: .entity(bob, direction: .down, offset: 0.43), shaftWidth: 0.025, headLength: 0.12, headWidth: 0.11))
     gravity.style = RenderStyleComponent(color: .gravity, opacity: 0)
     gravity.revealOnHover = RevealOnHoverComponent(trigger: bob)
     scene.add(gravity)

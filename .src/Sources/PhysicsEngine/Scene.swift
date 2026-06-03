@@ -152,7 +152,7 @@ import Foundation
 		for entity in entities {
 			let style = effectiveStyle(for: entity)
 			guard style.opacity > 0.001 else { continue }
-			let color = style.color.withOpacity(style.opacity)
+			let color = style.color.with(opacity: style.opacity)
 
 			if let vectorComponent = entity.components[VectorComponent.self] {
 				switch vectorComponent.vector {
@@ -239,7 +239,7 @@ import Foundation
 	// MARK: - Private
 
 	private func effectiveStyle(for entity: Entity) -> RenderStyleComponent {
-		var style = entity.components[RenderStyleComponent.self] ?? RenderStyleComponent(color: .pivot)
+		var style = entity.components[RenderStyleComponent.self] ?? RenderStyleComponent(color: .white)
 		if let trigger = entity.revealOnHover?.trigger {
 			let visible = hoveredEntity == trigger || draggedEntity == trigger
 			style.opacity = visible ? 1 : 0

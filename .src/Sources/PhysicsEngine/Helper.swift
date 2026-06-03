@@ -11,14 +11,25 @@ import Foundation
 
 public enum Anchor {
 	case point(SIMD3<Float>)
-	case entity(Entity, offset: SIMD3<Float> = .zero)
+	case entity(Entity, direction: SIMD3<Float> = .trailing, offset: Float = 0)
 
 	public func resolve() -> SIMD3<Float> {
 		switch self {
 		case .point(let point):
 			return point
-		case .entity(let entity, let offset):
-			return (entity.transform?.position ?? .zero) + offset
+		case .entity(let entity, var direction, let offset):
+			direction = direction.normalized
+			let basePos = entity.transform?.position ?? .zero
+			var sizeOffset: SIMD3<Float> = .zero
+			if let body = entity.components[PhysicsBodyComponent.self] {
+				switch body.shape {
+				case .circle(let radius):
+					sizeOffset = direction * radius
+				case .rect(let width, let height):
+					sizeOffset = SIMD3<Float>(direction.x * width / 2, direction.y * height / 2, direction.z)
+				}
+			}
+			return basePos + sizeOffset + (direction * offset)
 		}
 	}
 }
@@ -68,6 +79,8 @@ public extension SIMD3 where Scalar == Float {
 	static var backward: SIMD3<Float> { .init(0, 0, -1) }
 	static var right: SIMD3<Float> { .init(1, 0, 0) }
 	static var left: SIMD3<Float> { .init(-1, 0, 0) }
+	static var trailing: SIMD3<Float> { .init(1, 0, 0) }
+	static var leading: SIMD3<Float> { .init(-1, 0, 0) }
 }
 
 // MARK: - Math Utilities

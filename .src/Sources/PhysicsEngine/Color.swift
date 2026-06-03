@@ -18,7 +18,7 @@ public struct Color: Equatable, Sendable {
         self.a = a
     }
 
-    public func withOpacity(_ opacity: Float) -> Color {
+    public func with(opacity: Float) -> Color {
         Color(r: r, g: g, b: b, a: a * opacity)
     }
 	
@@ -39,8 +39,6 @@ public struct Color: Equatable, Sendable {
 			a: a
 		)
 	}
-	
-	
 
     // MARK: Named Presets
 
