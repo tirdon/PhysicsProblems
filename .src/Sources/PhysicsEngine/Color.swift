@@ -29,6 +29,18 @@ public struct Color: Equatable, Sendable {
 	public var lighter: Color {
 		Color(r: min(1, r * 1.2), g: min(1, g * 1.2), b: min(1, b * 1.2), a: a)
 	}
+	
+	public var highlight: Color {
+		// Neonize: boost brightness and add a bright tint
+		Color(
+			r: min(1.0, r * 1.5 + 0.2),
+			g: min(1.0, g * 1.5 + 0.2),
+			b: min(1.0, b * 1.5 + 0.2),
+			a: a
+		)
+	}
+	
+	
 
     // MARK: Named Presets
 
@@ -44,5 +56,13 @@ public struct Color: Equatable, Sendable {
     public static let green         = Color(r: 0.30, g: 0.85, b: 0.39)
     public static let blue          = Color(r: 0.0,  g: 0.48, b: 1.0)
     public static let orange        = Color(r: 1.0,  g: 0.58, b: 0.0)
+    public static let yellow        = Color(r: 1.0,  g: 0.80, b: 0.0)
+    public static let purple        = Color(r: 0.68, g: 0.32, b: 0.87)
+    public static let cyan          = Color(r: 0.35, g: 0.78, b: 0.98)
+    public static let magenta       = Color(r: 1.0,  g: 0.17, b: 0.33)
+    public static let teal          = Color(r: 0.18, g: 0.67, b: 0.75)
+    public static let indigo        = Color(r: 0.34, g: 0.33, b: 0.83)
     public static let white         = Color(r: 1.0,  g: 1.0,  b: 1.0)
+    public static let black         = Color(r: 0.0,  g: 0.0,  b: 0.0)
+    public static let gray          = Color(r: 0.55, g: 0.55, b: 0.57)
 }
