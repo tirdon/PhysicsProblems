@@ -362,6 +362,9 @@ export class WebGPURenderer {
         case 'circle':
           this._appendCircle(vertices, prim.center, prim.radius, prim.color);
           break;
+        case 'ellipse':
+          this._appendEllipse(vertices, prim.center, prim.major, prim.minor, prim.rotation, prim.color);
+          break;
         case 'line':
           this._appendLine(vertices, prim.start, prim.end, prim.width, prim.color);
           break;
@@ -379,14 +382,35 @@ export class WebGPURenderer {
    * @private
    */
   _appendCircle(vertices, center, radius, color) {
+    this._appendEllipse(vertices, center, radius, radius, 0, color);
+  }
+
+  /**
+   * Appends an ellipse as a triangle fan.
+   * @private
+   */
+  _appendEllipse(vertices, center, major, minor, rotation, color) {
+    const cosR = Math.cos(rotation);
+    const sinR = Math.sin(rotation);
+
     for (let i = 0; i < CIRCLE_SEGMENTS; i++) {
       const a0 = (i / CIRCLE_SEGMENTS) * Math.PI * 2;
       const a1 = ((i + 1) / CIRCLE_SEGMENTS) * Math.PI * 2;
 
+      const x0 = Math.cos(a0) * major;
+      const y0 = Math.sin(a0) * minor;
+      const rx0 = x0 * cosR - y0 * sinR;
+      const ry0 = x0 * sinR + y0 * cosR;
+
+      const x1 = Math.cos(a1) * major;
+      const y1 = Math.sin(a1) * minor;
+      const rx1 = x1 * cosR - y1 * sinR;
+      const ry1 = x1 * sinR + y1 * cosR;
+
       this._appendTriangle(vertices,
         center,
-        { x: center.x + Math.cos(a0) * radius, y: center.y + Math.sin(a0) * radius, z: 0 },
-        { x: center.x + Math.cos(a1) * radius, y: center.y + Math.sin(a1) * radius, z: 0 },
+        { x: center.x + rx0, y: center.y + ry0, z: 0 },
+        { x: center.x + rx1, y: center.y + ry1, z: 0 },
         color
       );
     }

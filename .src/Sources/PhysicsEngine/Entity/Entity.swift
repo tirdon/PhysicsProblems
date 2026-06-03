@@ -55,6 +55,10 @@ open class Entity: Hashable, Identifiable {
 	}
 }
 
+public class MeshEntity: Entity {
+	
+}
+
 public class PathEntity: Entity {
 	public var vector: VectorComponent? {
 		get { components[VectorComponent.self] }

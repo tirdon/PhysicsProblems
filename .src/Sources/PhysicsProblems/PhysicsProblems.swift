@@ -123,6 +123,15 @@ private func primitivesToJSArray(_ primitives: [RenderPrimitive]) -> JSValue {
                 ("radius", Double(radius).jsValue),
                 ("color", colorToJS(color))
             ]))
+        case .ellipse(let center, let major, let minor, let rotation, let color):
+            array.append(makeJSObj([
+                ("type", "ellipse".jsValue),
+                ("center", makeJSObj([("x", center.x.jsValue), ("y", center.y.jsValue), ("z", center.z.jsValue)])),
+                ("major", Double(major).jsValue),
+                ("minor", Double(minor).jsValue),
+                ("rotation", Double(rotation).jsValue),
+                ("color", colorToJS(color))
+            ]))
         case .line(let start, let end, let width, let color):
             array.append(makeJSObj([
                 ("type", "line".jsValue),

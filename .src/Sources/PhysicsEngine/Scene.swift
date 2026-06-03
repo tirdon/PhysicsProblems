@@ -160,6 +160,11 @@ import Foundation
 					if let transform = entity.transform {
 						primitives.append(.circle(center: transform.position, radius: radius, color: color))
 					}
+				case .ellipse(let major, let minor):
+					if let transform = entity.transform {
+						// For now, assume 0 rotation since it requires extracting from quaternion
+						primitives.append(.ellipse(center: transform.position, major: major, minor: minor, rotation: 0, color: color))
+					}
 				case .line(let start, let end, let width):
 					primitives.append(.line(
 						start: start.resolve(),
@@ -201,6 +206,13 @@ import Foundation
 					if point.distance(to: transform.position) <= hitRadius {
 						return entity
 					}
+				case .ellipse(let major, let minor):
+					let dx = abs(point.x - transform.position.x)
+					let dy = abs(point.y - transform.position.y)
+					// Simple bounding box hit test for now
+					if dx <= major + interaction.hitPadding && dy <= minor + interaction.hitPadding {
+						return entity
+					}
 				case .rect(let width, let height):
 					let dx = abs(point.x - transform.position.x)
 					let dy = abs(point.y - transform.position.y)
@@ -217,6 +229,14 @@ import Foundation
 					if let transform = entity.transform {
 						let hitRadius = radius + interaction.hitPadding
 						if point.distance(to: transform.position) <= hitRadius {
+							return entity
+						}
+					}
+				case .ellipse(let major, let minor):
+					if let transform = entity.transform {
+						let dx = abs(point.x - transform.position.x)
+						let dy = abs(point.y - transform.position.y)
+						if dx <= major + interaction.hitPadding && dy <= minor + interaction.hitPadding {
 							return entity
 						}
 					}

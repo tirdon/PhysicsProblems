@@ -9,6 +9,9 @@ public class Ellipse: PathEntity {
 	
 	public init(major: Float, minor: Float) {
 		super.init()
+		self.vector = VectorComponent(vector: .ellipse(major: major, minor: minor))
+		self.components[PhysicsBodyComponent.self] = PhysicsBodyComponent(shape: .ellipse(major: major, minor: minor))
+		self.style = RenderStyleComponent(color: .green)
 	}
 	
 	public override init() {

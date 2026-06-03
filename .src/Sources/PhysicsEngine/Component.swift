@@ -54,6 +54,7 @@ public struct TransformComponent: Component {
 public struct VectorComponent: Component {
 	public enum Vector {
 		case circle(radius: Float)
+		case ellipse(major: Float, minor: Float)
 		case line(start: Anchor, end: Anchor, width: Float)
 		case arrow(start: Anchor, end: Anchor, shaftWidth: Float, headLength: Float, headWidth: Float, tipShape: ArrowShape? = .triangle, tailShape: ArrowShape? = nil)
 	}
@@ -112,6 +113,7 @@ public struct PhysicsBodyComponent: Component {
 	public enum Shape {
 		case circle(radius: Float)
 		case rect(width: Float, height: Float)
+		case ellipse(major: Float, minor: Float)
 	}
 	public var shape: Shape
 

@@ -25,6 +25,8 @@ public enum Anchor {
 				switch body.shape {
 				case .circle(let radius):
 					sizeOffset = direction * radius
+				case .ellipse(let major, let minor):
+					sizeOffset = SIMD3<Float>(direction.x * major, direction.y * minor, direction.z)
 				case .rect(let width, let height):
 					sizeOffset = SIMD3<Float>(direction.x * width / 2, direction.y * height / 2, direction.z)
 				}
@@ -113,6 +115,7 @@ public enum ArrowShape: String {
 
 public enum RenderPrimitive {
 	case circle(center: SIMD3<Float>, radius: Float, color: Color)
+	case ellipse(center: SIMD3<Float>, major: Float, minor: Float, rotation: Float, color: Color)
 	case line(start: SIMD3<Float>, end: SIMD3<Float>, width: Float, color: Color)
 	case arrow(start: SIMD3<Float>, end: SIMD3<Float>, shaftWidth: Float, headLength: Float, headWidth: Float, tipShape: ArrowShape?, tailShape: ArrowShape?, color: Color)
 }
