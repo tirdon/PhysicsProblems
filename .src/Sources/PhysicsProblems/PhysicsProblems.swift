@@ -37,7 +37,7 @@ struct PhysicsProblems {
 					hoverable: true, draggable: true, pauseAnimationOnHover: true
 				)
 				
-				await scene.wait(second: 5)
+				await scene.wait(second: 4)
 				await scene.pause(system: PendulumAnimationSystem.self)
 				scene.play(circle.edge(to: .bottom))
             }
@@ -147,6 +147,31 @@ private func primitivesToJSArray(_ primitives: [RenderPrimitive]) -> JSValue {
             if let tip = tipShape { props.append(("tipShape", tip.rawValue.jsValue)) }
             if let tail = tailShape { props.append(("tailShape", tail.rawValue.jsValue)) }
             array.append(makeJSObj(props))
+        case .rect(let center, let width, let height, let rotation, let color):
+            array.append(makeJSObj([
+                ("type", "rect".jsValue),
+                ("center", makeJSObj([("x", center.x.jsValue), ("y", center.y.jsValue), ("z", center.z.jsValue)])),
+                ("width", Double(width).jsValue),
+                ("height", Double(height).jsValue),
+                ("rotation", Double(rotation).jsValue),
+                ("color", colorToJS(color))
+            ]))
+        case .polygon(let points, let color):
+            let pointsArr = points.map { makeJSObj([("x", $0.x.jsValue), ("y", $0.y.jsValue), ("z", $0.z.jsValue)]) }
+            array.append(makeJSObj([
+                ("type", "polygon".jsValue),
+                ("points", pointsArr.jsValue),
+                ("color", colorToJS(color))
+            ]))
+        case .arc(let center, let radius, let startAngle, let endAngle, let color):
+            array.append(makeJSObj([
+                ("type", "arc".jsValue),
+                ("center", makeJSObj([("x", center.x.jsValue), ("y", center.y.jsValue), ("z", center.z.jsValue)])),
+                ("radius", Double(radius).jsValue),
+                ("startAngle", Double(startAngle).jsValue),
+                ("endAngle", Double(endAngle).jsValue),
+                ("color", colorToJS(color))
+            ]))
         }
     }
     return array.jsValue

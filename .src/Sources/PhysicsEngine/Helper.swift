@@ -80,6 +80,57 @@ public extension SIMD3 where Scalar == Float {
 	static let k: SIMD3<Float> = 1.k
 }
 
+public extension SIMD4 where Scalar == Float {
+	// MARK: - Quaternion functionality (mimicking simd_quatf)
+	
+	static let identity = SIMD4<Float>(0, 0, 0, 1)
+
+	init(angle: Float, axis: SIMD3<Float>) {
+		let halfAngle = angle * 0.5
+		let s = sin(halfAngle)
+		let c = cos(halfAngle)
+		let normalizedAxis = axis.normalized
+		self.init(normalizedAxis.x * s, normalizedAxis.y * s, normalizedAxis.z * s, c)
+	}
+
+	var conjugate: SIMD4<Float> {
+		SIMD4<Float>(-x, -y, -z, w)
+	}
+
+	var inverse: SIMD4<Float> {
+		let lenSq = x*x + y*y + z*z + w*w
+		guard lenSq > 0.000001 else { return self }
+		return conjugate / lenSq
+	}
+
+	static func *(lhs: SIMD4<Float>, rhs: SIMD4<Float>) -> SIMD4<Float> {
+		let x1 = lhs.x, y1 = lhs.y, z1 = lhs.z, w1 = lhs.w
+		let x2 = rhs.x, y2 = rhs.y, z2 = rhs.z, w2 = rhs.w
+		
+		return SIMD4<Float>(
+			w1*x2 + x1*w2 + y1*z2 - z1*y2,
+			w1*y2 - x1*z2 + y1*w2 + z1*x2,
+			w1*z2 + x1*y2 - y1*x2 + z1*w2,
+			w1*w2 - x1*x2 - y1*y2 - z1*z2
+		)
+	}
+	
+	func act(_ v: SIMD3<Float>) -> SIMD3<Float> {
+		let qVec = SIMD3<Float>(x, y, z)
+		let uv = cross(qVec, v)
+		let uuv = cross(qVec, uv)
+		return v + ((uv * w) + uuv) * 2.0
+	}
+}
+
+public func cross(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> SIMD3<Float> {
+	SIMD3<Float>(
+		a.y * b.z - a.z * b.y,
+		a.z * b.x - a.x * b.z,
+		a.x * b.y - a.y * b.x
+	)
+}
+
 public struct Unit: Sendable {
 	public let vector: SIMD3<Float>
 
@@ -128,6 +179,9 @@ public enum RenderPrimitive {
 	case ellipse(center: SIMD3<Float>, major: Float, minor: Float, rotation: Float, color: Color)
 	case line(start: SIMD3<Float>, end: SIMD3<Float>, width: Float, color: Color)
 	case arrow(start: SIMD3<Float>, end: SIMD3<Float>, shaftWidth: Float, headLength: Float, headWidth: Float, tipShape: ArrowShape?, tailShape: ArrowShape?, color: Color)
+	case rect(center: SIMD3<Float>, width: Float, height: Float, rotation: Float, color: Color)
+	case polygon(points: [SIMD3<Float>], color: Color)
+	case arc(center: SIMD3<Float>, radius: Float, startAngle: Float, endAngle: Float, color: Color)
 }
 
 public struct SceneSnapshot {

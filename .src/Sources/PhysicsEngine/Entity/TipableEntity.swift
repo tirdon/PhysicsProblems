@@ -5,7 +5,7 @@
 //  Created by Thiradon Mueangmo on 2/6/2569 BE.
 //
 
-public class Arrow: PathEntity {
+public class Arrow: Arc {
 	public init(tip: ArrowShape?, tail: ArrowShape?) {
 		super.init()
 		self.vector = VectorComponent(vector: .arrow(
@@ -17,7 +17,6 @@ public class Arrow: PathEntity {
 			tipShape: tip,
 			tailShape: tail
 		))
-		self.style = RenderStyleComponent(color: .white)
 	}
 
 	public override init() {
@@ -31,7 +30,6 @@ public class Arrow: PathEntity {
 			tipShape: .triangle,
 			tailShape: nil
 		))
-		self.style = RenderStyleComponent(color: .white)
 	}
 }
 
@@ -44,6 +42,18 @@ public class Line: Arrow {
 			end: .point(SIMD3<Float>(0, -1, 0)),
 			width: 0.018
 		))
-		self.style = RenderStyleComponent(color: .white)
+	}
+}
+
+//MARK: Curve
+public class CurvedArrow: Arc {
+	public init(radius: Float, startAngle: Float, endAngle: Float, tipShape: ArrowShape? = .triangle, tailShape: ArrowShape? = nil) {
+		super.init(radius: radius, startAngle: startAngle, endAngle: endAngle)
+		// Curved arrow shares Arc geometry, but needs arrowheads. 
+		// For now we map it to arc vector.
+	}
+	
+	public override init() {
+		super.init(radius: 0.2, startAngle: 0, endAngle: .pi)
 	}
 }

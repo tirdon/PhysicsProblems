@@ -45,7 +45,7 @@ public struct TransformComponent: Component {
 	public var position: SIMD3<Float>
 	public var orientation: SIMD4<Float>
 
-	public init(position: SIMD3<Float> = .zero, orientation: SIMD4<Float> = SIMD4<Float>(0, 0, 0, 1)) {
+	public init(position: SIMD3<Float> = .zero, orientation: SIMD4<Float> = .identity) {
 		self.position = position
 		self.orientation = orientation
 	}
@@ -57,6 +57,9 @@ public struct VectorComponent: Component {
 		case ellipse(major: Float, minor: Float)
 		case line(start: Anchor, end: Anchor, width: Float)
 		case arrow(start: Anchor, end: Anchor, shaftWidth: Float, headLength: Float, headWidth: Float, tipShape: ArrowShape? = .triangle, tailShape: ArrowShape? = nil)
+		case rect(width: Float, height: Float)
+		case polygon(points: [SIMD3<Float>])
+		case arc(radius: Float, startAngle: Float, endAngle: Float)
 	}
 	public var vector: Vector
 

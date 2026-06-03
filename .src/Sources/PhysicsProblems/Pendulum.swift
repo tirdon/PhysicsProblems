@@ -13,7 +13,7 @@ class Pendulum: Entity {
 		super.init()
 		self.components[PhysicsBodyComponent.self] = PhysicsBodyComponent(shape: .circle(radius: 0.26))
 		self.components[VectorComponent.self] = VectorComponent(vector: .circle(radius: 0.25))
-		self.components[RenderStyleComponent.self] = RenderStyleComponent(color: .bob)
+//		self.components[RenderStyleComponent.self] = RenderStyleComponent(color: .bob)
 	}
 }
 

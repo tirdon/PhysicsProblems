@@ -35,6 +35,10 @@ import Foundation
 	// MARK: - Entity Management
 
 	public func add(_ entity: some Entity) {
+		if let pathEntity = entity as? PathEntity {
+			let colors: [Color] = [.red, .green, .blue, .orange, .purple, .cyan, .magenta, .teal, .indigo, .yellow]
+			pathEntity.color(colors[self.entities.count % colors.count])
+		}
 		self.entities.append(entity)
 	}
 
@@ -220,6 +224,19 @@ import Foundation
 						tailShape: tailShape,
 						color: color
 					))
+				case .rect(let width, let height):
+					if let transform = entity.transform {
+						primitives.append(.rect(center: transform.position, width: width, height: height, rotation: 0, color: color))
+					}
+				case .polygon(let points):
+					if let transform = entity.transform {
+						let absolutePoints = points.map { $0 + transform.position }
+						primitives.append(.polygon(points: absolutePoints, color: color))
+					}
+				case .arc(let radius, let startAngle, let endAngle):
+					if let transform = entity.transform {
+						primitives.append(.arc(center: transform.position, radius: radius, startAngle: startAngle, endAngle: endAngle, color: color))
+					}
 				}
 			}
 		}
@@ -286,6 +303,39 @@ import Foundation
 					let distance = distanceFromPointToSegment(point, start.resolve(), end.resolve())
 					if distance <= headWidth * 0.5 + interaction.hitPadding {
 						return entity
+					}
+				case .rect(let width, let height):
+					if let transform = entity.transform {
+						let dx = abs(point.x - transform.position.x)
+						let dy = abs(point.y - transform.position.y)
+						if dx <= (width * 0.5) + interaction.hitPadding && dy <= (height * 0.5) + interaction.hitPadding {
+							return entity
+						}
+					}
+				case .polygon(let points):
+					if let transform = entity.transform {
+						var minX: Float = .greatestFiniteMagnitude
+						var maxX: Float = -.greatestFiniteMagnitude
+						var minY: Float = .greatestFiniteMagnitude
+						var maxY: Float = -.greatestFiniteMagnitude
+						for p in points {
+							minX = min(minX, p.x)
+							maxX = max(maxX, p.x)
+							minY = min(minY, p.y)
+							maxY = max(maxY, p.y)
+						}
+						let localPoint = point - transform.position
+						if localPoint.x >= minX - interaction.hitPadding && localPoint.x <= maxX + interaction.hitPadding &&
+						   localPoint.y >= minY - interaction.hitPadding && localPoint.y <= maxY + interaction.hitPadding {
+							return entity
+						}
+					}
+				case .arc(let radius, _, _):
+					if let transform = entity.transform {
+						let hitRadius = radius + interaction.hitPadding
+						if point.distance(to: transform.position) <= hitRadius {
+							return entity
+						}
 					}
 				}
 			}
