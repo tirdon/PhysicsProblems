@@ -11,9 +11,9 @@ import Foundation
 class Pendulum: Entity {
 	override public init() {
 		super.init()
-		self.components[PhysicsBodyComponent.self] = PhysicsBodyComponent(shape: .circle(radius: 0.26))
-		self.components[VectorComponent.self] = VectorComponent(vector: .circle(radius: 0.25))
-//		self.components[RenderStyleComponent.self] = RenderStyleComponent(color: .bob)
+		self.components[PhysicsBodyComponent.self] = PhysicsBodyComponent(shape: .circle(radius: 1.0))
+		self.components[VectorComponent.self] = VectorComponent(vector: .circle(radius: 1.0))
+		self.components[RenderStyleComponent.self] = RenderStyleComponent(color: .blue)
 	}
 }
 

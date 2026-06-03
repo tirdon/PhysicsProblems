@@ -60,6 +60,7 @@ public struct VectorComponent: Component {
 		case rect(width: Float, height: Float)
 		case polygon(points: [SIMD3<Float>])
 		case arc(radius: Float, startAngle: Float, endAngle: Float)
+		case wall(start: Anchor, end: Anchor, spacing: Float, face: Unit)
 	}
 	public var vector: Vector
 

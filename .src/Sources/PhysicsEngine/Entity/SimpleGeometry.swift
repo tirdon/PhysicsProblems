@@ -28,7 +28,7 @@ public class Ellipse: Arc {
 	
 	public override init() {
 		super.init()
-		self.vector = VectorComponent(vector: .circle(radius: 0.12))
+		self.vector = VectorComponent(vector: .circle(radius: 1.0))
 	}
 }
 
@@ -109,5 +109,21 @@ public class Triangle: Polygon {
 	
 	public override convenience init() {
 		self.init(base: 0.2, height: 0.2)
+	}
+}
+
+//MARK: Wall
+public class Wall: PathEntity {
+	public init(start: Anchor, end: Anchor, spacing: Float = 0.1, face: Unit = .top) {
+		super.init()
+		self.vector = VectorComponent(vector: .wall(start: start, end: end, spacing: spacing, face: face))
+	}
+
+	public convenience init(start: SIMD3<Float>, end: SIMD3<Float>, spacing: Float = 0.1, face: Unit = .top) {
+		self.init(start: .point(start), end: .point(end), spacing: spacing, face: face)
+	}
+	
+	public override convenience init() {
+		self.init(start: SIMD3<Float>(-1, 0, 0), end: SIMD3<Float>(1, 0, 0))
 	}
 }

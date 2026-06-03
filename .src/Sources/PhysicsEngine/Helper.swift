@@ -182,6 +182,7 @@ public enum RenderPrimitive {
 	case rect(center: SIMD3<Float>, width: Float, height: Float, rotation: Float, color: Color)
 	case polygon(points: [SIMD3<Float>], color: Color)
 	case arc(center: SIMD3<Float>, radius: Float, startAngle: Float, endAngle: Float, color: Color)
+	case wall(start: SIMD3<Float>, end: SIMD3<Float>, spacing: Float, face: SIMD3<Float>, color: Color)
 }
 
 public struct SceneSnapshot {

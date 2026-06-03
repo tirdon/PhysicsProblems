@@ -20,6 +20,7 @@ struct PhysicsProblems {
 
 				let circle = Pendulum()
                 scene.add(circle)
+				scene.add(Wall())
 
                 scene.play(circle.shift(1.i + 2.j))
 				
@@ -27,7 +28,7 @@ struct PhysicsProblems {
                 await scene.wait()
                 
                 circle.pendulumAnimation = PendulumPhysicsComponent(
-                    length: 2.0,
+                    length: 4.0,
                     baseAngle: 0,
                     amplitude: 0.28,
                     period: 2.4
@@ -170,6 +171,15 @@ private func primitivesToJSArray(_ primitives: [RenderPrimitive]) -> JSValue {
                 ("radius", Double(radius).jsValue),
                 ("startAngle", Double(startAngle).jsValue),
                 ("endAngle", Double(endAngle).jsValue),
+                ("color", colorToJS(color))
+            ]))
+        case .wall(let start, let end, let spacing, let face, let color):
+            array.append(makeJSObj([
+                ("type", "wall".jsValue),
+                ("start", makeJSObj([("x", start.x.jsValue), ("y", start.y.jsValue), ("z", start.z.jsValue)])),
+                ("end", makeJSObj([("x", end.x.jsValue), ("y", end.y.jsValue), ("z", end.z.jsValue)])),
+                ("spacing", Double(spacing).jsValue),
+                ("face", makeJSObj([("x", face.x.jsValue), ("y", face.y.jsValue), ("z", face.z.jsValue)])),
                 ("color", colorToJS(color))
             ]))
         }

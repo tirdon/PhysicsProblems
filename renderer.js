@@ -371,6 +371,9 @@ export class WebGPURenderer {
         case 'arrow':
           this._appendArrow(vertices, prim.start, prim.end, prim.shaftWidth, prim.headLength, prim.headWidth, prim.color, prim.tipShape, prim.tailShape);
           break;
+        case 'wall':
+          this._appendWall(vertices, prim.start, prim.end, prim.spacing, prim.face, prim.color);
+          break;
       }
     }
 
@@ -436,6 +439,45 @@ export class WebGPURenderer {
 
     this._appendTriangle(vertices, s0, s1, e0, color);
     this._appendTriangle(vertices, e0, s1, e1, color);
+  }
+
+  /**
+   * Appends a wall (base line + hatch marks).
+   * @private
+   */
+  _appendWall(vertices, start, end, spacing, face, color) {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 0.0001) return;
+
+    const dirX = dx / len;
+    const dirY = dy / len;
+
+    const lineWidth = 0.02;
+    this._appendLine(vertices, start, end, lineWidth, color);
+
+    const safeSpacing = Math.max(spacing, 0.02);
+    const hatchLength = 0.1;
+    // hatch is 45 degrees to the face
+    const cos45 = 0.70710678;
+    const sin45 = 0.70710678;
+    const hx = (face.x * cos45 - face.y * sin45) * hatchLength;
+    const hy = (face.x * sin45 + face.y * cos45) * hatchLength;
+
+    const numHatches = Math.floor(len / safeSpacing);
+    for (let i = 0; i <= numHatches; i++) {
+      const t = i * safeSpacing;
+      const pX = start.x + dirX * t;
+      const pY = start.y + dirY * t;
+      this._appendLine(
+        vertices,
+        { x: pX, y: pY, z: 0 },
+        { x: pX + hx, y: pY + hy, z: 0 },
+        lineWidth,
+        color
+      );
+    }
   }
 
   /**

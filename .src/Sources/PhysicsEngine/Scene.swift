@@ -237,6 +237,15 @@ import Foundation
 					if let transform = entity.transform {
 						primitives.append(.arc(center: transform.position, radius: radius, startAngle: startAngle, endAngle: endAngle, color: color))
 					}
+				case .wall(let start, let end, let spacing, let faceUnit):
+					let face = entity.transform?.orientation.act(faceUnit.vector) ?? faceUnit.vector
+					primitives.append(.wall(
+						start: start.resolve(),
+						end: end.resolve(),
+						spacing: spacing,
+						face: face,
+						color: color
+					))
 				}
 			}
 		}
@@ -336,6 +345,11 @@ import Foundation
 						if point.distance(to: transform.position) <= hitRadius {
 							return entity
 						}
+					}
+				case .wall(let start, let end, _, _):
+					let distance = distanceFromPointToSegment(point, start.resolve(), end.resolve())
+					if distance <= 0.1 + interaction.hitPadding {
+						return entity
 					}
 				}
 			}
