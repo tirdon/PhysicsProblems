@@ -8,11 +8,13 @@ let package = Package(
 	platforms: [.macOS(.v26)],
 	dependencies: [.package(url: "https://github.com/swiftwasm/JavaScriptKit.git", branch: "main" )],
     targets: [
+		.target(name: "PhysicsEngine"),
         .executableTarget(
             name: "PhysicsProblems",
 			dependencies: [
 				.product(name: "JavaScriptKit", package: "JavaScriptKit"),
-				.product(name: "JavaScriptEventLoop", package: "JavaScriptKit")
+				.product(name: "JavaScriptEventLoop", package: "JavaScriptKit"),
+				.target(name: "PhysicsEngine")
 			],
 			swiftSettings: [
 				.enableExperimentalFeature("Extern")
@@ -23,7 +25,7 @@ let package = Package(
         ),
         .testTarget(
             name: "PhysicsProblemsTests",
-            dependencies: ["PhysicsProblems"]
+            dependencies: ["PhysicsEngine"]
         ),
     ],
     swiftLanguageModes: [.v6]

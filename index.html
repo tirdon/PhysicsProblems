@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Physics Problems</title>
+  <meta name="description" content="Interactive physics simulations — pendulum, forces, and more.">
   <link rel="stylesheet" href="index.css">
 </head>
 <body>
@@ -15,14 +16,18 @@
     </div>
   </main>
 
+  <!-- Load WebGPU renderer and expose on global scope for Swift WASM -->
+  <script type="module">
+    import { WebGPURenderer } from './renderer.js';
+    // Make it available globally so Swift can access it via JSObject.global
+    window.WebGPURenderer = WebGPURenderer;
+  </script>
+
   <script async type="module">
     import './polyfill.js';
     import { init } from './script/index.js';
 
-    const module = fetch(new URL('./script/PhysicsProblems.wasm', window.location.href));
-
     await init({
-      module,
       getImports() {
         return {};
       }
