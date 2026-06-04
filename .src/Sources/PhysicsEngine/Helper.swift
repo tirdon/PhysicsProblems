@@ -121,6 +121,28 @@ public extension SIMD4 where Scalar == Float {
 		let uuv = cross(qVec, uv)
 		return v + ((uv * w) + uuv) * 2.0
 	}
+	
+	func slerp(to other: SIMD4<Float>, t: Float) -> SIMD4<Float> {
+		var dot = self.x*other.x + self.y*other.y + self.z*other.z + self.w*other.w
+		var q1 = other
+		if dot < 0 {
+			q1 = -other
+			dot = -dot
+		}
+		if dot > 0.9995 {
+			let result = self + (q1 - self) * t
+			let lenSq = result.x*result.x + result.y*result.y + result.z*result.z + result.w*result.w
+			let invLen = 1.0 / sqrt(lenSq)
+			return result * invLen
+		}
+		let theta0 = acos(dot)
+		let theta = theta0 * t
+		let sinTheta = sin(theta)
+		let sinTheta0 = sin(theta0)
+		let s0 = cos(theta) - dot * sinTheta / sinTheta0
+		let s1 = sinTheta / sinTheta0
+		return (self * s0) + (q1 * s1)
+	}
 }
 
 public func cross(_ a: SIMD3<Float>, _ b: SIMD3<Float>) -> SIMD3<Float> {
@@ -175,14 +197,14 @@ public enum ArrowShape: String {
 }
 
 public enum RenderPrimitive {
-	case circle(center: SIMD3<Float>, radius: Float, color: Color)
-	case ellipse(center: SIMD3<Float>, major: Float, minor: Float, rotation: Float, color: Color)
-	case line(start: SIMD3<Float>, end: SIMD3<Float>, width: Float, color: Color)
-	case arrow(start: SIMD3<Float>, end: SIMD3<Float>, shaftWidth: Float, headLength: Float, headWidth: Float, tipShape: ArrowShape?, tailShape: ArrowShape?, color: Color)
-	case rect(center: SIMD3<Float>, width: Float, height: Float, rotation: Float, color: Color)
-	case polygon(points: [SIMD3<Float>], color: Color)
-	case arc(center: SIMD3<Float>, radius: Float, startAngle: Float, endAngle: Float, color: Color)
-	case wall(start: SIMD3<Float>, end: SIMD3<Float>, spacing: Float, face: SIMD3<Float>, color: Color)
+	case circle(center: SIMD3<Float>, radius: Float, style: RenderStyleComponent)
+	case ellipse(center: SIMD3<Float>, major: Float, minor: Float, rotation: Float, style: RenderStyleComponent)
+	case line(start: SIMD3<Float>, end: SIMD3<Float>, width: Float, style: RenderStyleComponent)
+	case arrow(start: SIMD3<Float>, end: SIMD3<Float>, shaftWidth: Float, headLength: Float, headWidth: Float, tipShape: ArrowShape?, tailShape: ArrowShape?, style: RenderStyleComponent)
+	case rect(center: SIMD3<Float>, width: Float, height: Float, rotation: Float, style: RenderStyleComponent)
+	case polygon(points: [SIMD3<Float>], style: RenderStyleComponent)
+	case arc(center: SIMD3<Float>, radius: Float, startAngle: Float, endAngle: Float, style: RenderStyleComponent)
+	case wall(start: SIMD3<Float>, end: SIMD3<Float>, spacing: Float, face: SIMD3<Float>, style: RenderStyleComponent)
 }
 
 public struct SceneSnapshot {

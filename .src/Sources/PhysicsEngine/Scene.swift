@@ -7,12 +7,48 @@
 
 import Foundation
 
+public struct Camera {
+	public var transform: TransformComponent
+	public var fov: Float
+
+	public init(position: SIMD3<Float> = SIMD3<Float>(0, 0, 10), orientation: SIMD4<Float> = .identity, fov: Float = 60) {
+		self.transform = TransformComponent(position: position, orientation: orientation)
+		self.fov = fov
+	}
+
+	public mutating func look(at target: SIMD3<Float>) {
+		let forward = SIMD3<Float>(0, 0, -1)
+		let direction = (target - transform.position).normalized
+		let dotProd = (forward.x * direction.x) + (forward.y * direction.y) + (forward.z * direction.z)
+		if dotProd < -0.9999 {
+			transform.orientation = SIMD4<Float>(angle: .pi, axis: SIMD3<Float>(0, 1, 0))
+		} else {
+			let axis = cross(forward, direction)
+			if axis.length > 0.0001 {
+				let angle = acos(dotProd)
+				transform.orientation = SIMD4<Float>(angle: angle, axis: axis.normalized)
+			} else {
+				transform.orientation = .identity
+			}
+		}
+	}
+
+	public mutating func orbit(about pivot: SIMD3<Float>, angle: Float, axis: SIMD3<Float> = SIMD3<Float>(0, 1, 0)) {
+		let offset = transform.position - pivot
+		let orbitRotation = SIMD4<Float>(angle: angle, axis: axis.normalized)
+		let newOffset = orbitRotation.act(offset)
+		transform.position = pivot + newOffset
+		look(at: pivot)
+	}
+}
+
 @MainActor public class SceneWorld {
 	private(set) public var entities: [Entity] = []
 	private var systems: Set<AnySystem> = []
 
 	public private(set) var viewportId: String?
 	public var size: SIMD2<Float> = .init(10, 10)
+	public var camera: Camera = Camera()
 	public private(set) var hoveredEntity: Entity?
 	public private(set) var draggedEntity: Entity?
 	private var dragOffset: SIMD3<Float> = .zero
@@ -193,25 +229,24 @@ import Foundation
 		for entity in entities {
 			let style = effectiveStyle(for: entity)
 			guard style.opacity > 0.001 else { continue }
-			let color = style.color.with(opacity: style.opacity)
 
 			if let vectorComponent = entity.components[VectorComponent.self] {
 				switch vectorComponent.vector {
 				case .circle(let radius):
 					if let transform = entity.transform {
-						primitives.append(.circle(center: transform.position, radius: radius, color: color))
+						primitives.append(.circle(center: transform.position, radius: radius, style: style))
 					}
 				case .ellipse(let major, let minor):
 					if let transform = entity.transform {
 						// For now, assume 0 rotation since it requires extracting from quaternion
-						primitives.append(.ellipse(center: transform.position, major: major, minor: minor, rotation: 0, color: color))
+						primitives.append(.ellipse(center: transform.position, major: major, minor: minor, rotation: 0, style: style))
 					}
 				case .line(let start, let end, let width):
 					primitives.append(.line(
 						start: start.resolve(),
 						end: end.resolve(),
 						width: width,
-						color: color
+						style: style
 					))
 				case .arrow(let start, let end, let shaftWidth, let headLength, let headWidth, let tipShape, let tailShape):
 					primitives.append(.arrow(
@@ -222,20 +257,20 @@ import Foundation
 						headWidth: headWidth,
 						tipShape: tipShape,
 						tailShape: tailShape,
-						color: color
+						style: style
 					))
 				case .rect(let width, let height):
 					if let transform = entity.transform {
-						primitives.append(.rect(center: transform.position, width: width, height: height, rotation: 0, color: color))
+						primitives.append(.rect(center: transform.position, width: width, height: height, rotation: 0, style: style))
 					}
 				case .polygon(let points):
 					if let transform = entity.transform {
 						let absolutePoints = points.map { $0 + transform.position }
-						primitives.append(.polygon(points: absolutePoints, color: color))
+						primitives.append(.polygon(points: absolutePoints, style: style))
 					}
 				case .arc(let radius, let startAngle, let endAngle):
 					if let transform = entity.transform {
-						primitives.append(.arc(center: transform.position, radius: radius, startAngle: startAngle, endAngle: endAngle, color: color))
+						primitives.append(.arc(center: transform.position, radius: radius, startAngle: startAngle, endAngle: endAngle, style: style))
 					}
 				case .wall(let start, let end, let spacing, let faceUnit):
 					let face = entity.transform?.orientation.act(faceUnit.vector) ?? faceUnit.vector
@@ -244,7 +279,7 @@ import Foundation
 						end: end.resolve(),
 						spacing: spacing,
 						face: face,
-						color: color
+						style: style
 					))
 				}
 			}

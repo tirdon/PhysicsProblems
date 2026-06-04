@@ -56,4 +56,5 @@ public struct Color: Equatable, Sendable {
     public static let white         = Color(r: 1.0,  g: 1.0,  b: 1.0)
     public static let black         = Color(r: 0.0,  g: 0.0,  b: 0.0)
     public static let gray          = Color(r: 0.55, g: 0.55, b: 0.57)
+    public static let clear         = Color(r: 0.0,  g: 0.0,  b: 0.0, a: 0.0)
 }

@@ -183,6 +183,10 @@ export class WebGPURenderer {
     this.queue.submit([encoder.finish()]);
   }
 
+  setCamera(camera) {
+    this.camera = camera;
+  }
+
   /**
    * Converts a pointer event to world coordinates.
    * @param {PointerEvent} event
@@ -193,6 +197,41 @@ export class WebGPURenderer {
     const rect = target.getBoundingClientRect();
     const normalizedX = (event.clientX - rect.left) / Math.max(rect.width, 1);
     const normalizedY = (event.clientY - rect.top) / Math.max(rect.height, 1);
+
+    if (this.camera) {
+      let ndcX = (normalizedX * 2 - 1);
+      let ndcY = (1 - normalizedY * 2);
+      
+      let fovRad = (this.camera.fov * Math.PI) / 180.0;
+      let f = 1.0 / Math.tan(fovRad / 2.0);
+      
+      let viewX = ndcX * this._aspectRatio / f;
+      let viewY = ndcY / f;
+      let viewZ = -1.0;
+
+      let cx = this.camera.orientation.x;
+      let cy = this.camera.orientation.y;
+      let cz = this.camera.orientation.z;
+      let cw = this.camera.orientation.w;
+
+      let tx = 2 * (cy * viewZ - cz * viewY);
+      let ty = 2 * (cz * viewX - cx * viewZ);
+      let tz = 2 * (cx * viewY - cy * viewX);
+
+      let rayX = viewX + cw * tx + cy * tz - cz * ty;
+      let rayY = viewY + cw * ty + cz * tx - cx * tz;
+      let rayZ = viewZ + cw * tz + cx * ty - cy * tx;
+
+      if (Math.abs(rayZ) < 0.0001) {
+        return { x: this.camera.position.x, y: this.camera.position.y, z: 0 };
+      }
+      let t = -this.camera.position.z / rayZ;
+      return {
+        x: this.camera.position.x + rayX * t,
+        y: this.camera.position.y + rayY * t,
+        z: 0
+      };
+    }
 
     return {
       x: this.cameraCenter.x + (normalizedX * 2 - 1) * this._cameraWidth * 0.5,
@@ -603,9 +642,42 @@ export class WebGPURenderer {
    * @private
    */
   _project(point) {
+    let px = point.x;
+    let py = point.y;
+    let pz = point.z || 0;
+
+    if (this.camera) {
+      let dx = px - this.camera.position.x;
+      let dy = py - this.camera.position.y;
+      let dz = pz - this.camera.position.z;
+
+      let cx = -this.camera.orientation.x;
+      let cy = -this.camera.orientation.y;
+      let cz = -this.camera.orientation.z;
+      let cw = this.camera.orientation.w;
+
+      let tx = 2 * (cy * dz - cz * dy);
+      let ty = 2 * (cz * dx - cx * dz);
+      let tz = 2 * (cx * dy - cy * dx);
+
+      px = dx + cw * tx + cy * tz - cz * ty;
+      py = dy + cw * ty + cz * tx - cx * tz;
+      pz = dz + cw * tz + cx * ty - cy * tx;
+
+      let fovRad = (this.camera.fov * Math.PI) / 180.0;
+      let f = 1.0 / Math.tan(fovRad / 2.0);
+      let zDist = -pz;
+      if (zDist < 0.001) zDist = 0.001;
+
+      return {
+        x: (px * f / this._aspectRatio) / zDist,
+        y: (py * f) / zDist
+      };
+    }
+
     return {
-      x: (point.x - this.cameraCenter.x) / (this._cameraWidth * 0.5),
-      y: (point.y - this.cameraCenter.y) / (this._cameraHeight * 0.5),
+      x: (px - this.cameraCenter.x) / (this._cameraWidth * 0.5),
+      y: (py - this.cameraCenter.y) / (this._cameraHeight * 0.5),
     };
   }
 }

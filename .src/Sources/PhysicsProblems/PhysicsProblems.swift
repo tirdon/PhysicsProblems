@@ -22,9 +22,9 @@ struct PhysicsProblems {
                 scene.add(circle)
 				scene.add(Wall())
 
-                scene.play(circle.shift(1.i + 2.j))
+                scene.play(circle.shift(1.i + 2.j, easing: .easeOut))
 				
-                scene.play(circle.move(to: .origin))
+                scene.play(circle.move(to: .origin, easing: .easeInOut))
                 await scene.wait()
                 
                 circle.pendulumAnimation = PendulumPhysicsComponent(
@@ -40,7 +40,7 @@ struct PhysicsProblems {
 				
 				await scene.wait(second: 4)
 				await scene.pause(system: PendulumAnimationSystem.self)
-				scene.play(circle.edge(to: .bottom))
+				scene.play(circle.edge(to: .bottom, easing: .easeIn))
             }
 
             // Set up JS renderer and animation loop
@@ -102,6 +102,16 @@ private func createJSRenderer(canvasID: String) async throws -> JSObject {
         _ = renderer.setViewport!(JSValue.null)
     }
     
+    if !renderer.setCamera.isUndefined {
+        let cam = scene.camera
+        let jsCam = makeJSObj([
+            ("position", makeJSObj([("x", cam.transform.position.x.jsValue), ("y", cam.transform.position.y.jsValue), ("z", cam.transform.position.z.jsValue)])),
+            ("orientation", makeJSObj([("x", cam.transform.orientation.x.jsValue), ("y", cam.transform.orientation.y.jsValue), ("z", cam.transform.orientation.z.jsValue), ("w", cam.transform.orientation.w.jsValue)])),
+            ("fov", Float64(cam.fov).jsValue)
+        ])
+        _ = renderer.setCamera!(jsCam)
+    }
+    
     let snapshot = scene.snapshot()
     let jsArray = primitivesToJSArray(snapshot.primitives)
     _ = renderer.render!(jsArray)
@@ -109,79 +119,104 @@ private func createJSRenderer(canvasID: String) async throws -> JSObject {
 
 private func primitivesToJSArray(_ primitives: [RenderPrimitive]) -> JSValue {
     var array: [JSValue] = []
+    
+    func addStyle(_ props: inout [(String, JSValue)], style: RenderStyleComponent) {
+        props.append(("color", colorToJS(style.color.with(opacity: style.opacity))))
+        if let stroke = style.strokeColor {
+            props.append(("strokeColor", colorToJS(stroke.with(opacity: style.opacity))))
+            props.append(("strokeWidth", Double(style.strokeWidth).jsValue))
+            props.append(("strokeStyle", style.strokeStyle.rawValue.jsValue))
+            props.append(("strokeCap", style.strokeCap.rawValue.jsValue))
+        }
+    }
+
     for prim in primitives {
         switch prim {
-        case .circle(let center, let radius, let color):
-            array.append(makeJSObj([
+        case .circle(let center, let radius, let style):
+            var props: [(String, JSValue)] = [
                 ("type", "circle".jsValue),
                 ("center", makeJSObj([("x", center.x.jsValue), ("y", center.y.jsValue), ("z", center.z.jsValue)])),
-                ("radius", Double(radius).jsValue),
-                ("color", colorToJS(color))
-            ]))
-        case .ellipse(let center, let major, let minor, let rotation, let color):
-            array.append(makeJSObj([
+                ("radius", Double(radius).jsValue)
+            ]
+            addStyle(&props, style: style)
+            array.append(makeJSObj(props))
+            
+        case .ellipse(let center, let major, let minor, let rotation, let style):
+            var props: [(String, JSValue)] = [
                 ("type", "ellipse".jsValue),
                 ("center", makeJSObj([("x", center.x.jsValue), ("y", center.y.jsValue), ("z", center.z.jsValue)])),
                 ("major", Double(major).jsValue),
                 ("minor", Double(minor).jsValue),
-                ("rotation", Double(rotation).jsValue),
-                ("color", colorToJS(color))
-            ]))
-        case .line(let start, let end, let width, let color):
-            array.append(makeJSObj([
+                ("rotation", Double(rotation).jsValue)
+            ]
+            addStyle(&props, style: style)
+            array.append(makeJSObj(props))
+            
+        case .line(let start, let end, let width, let style):
+            var props: [(String, JSValue)] = [
                 ("type", "line".jsValue),
                 ("start", makeJSObj([("x", start.x.jsValue), ("y", start.y.jsValue), ("z", start.z.jsValue)])),
                 ("end", makeJSObj([("x", end.x.jsValue), ("y", end.y.jsValue), ("z", end.z.jsValue)])),
-                ("width", Double(width).jsValue),
-                ("color", colorToJS(color))
-            ]))
-        case .arrow(let start, let end, let shaftWidth, let headLength, let headWidth, let tipShape, let tailShape, let color):
+                ("width", Double(width).jsValue)
+            ]
+            addStyle(&props, style: style)
+            array.append(makeJSObj(props))
+            
+        case .arrow(let start, let end, let shaftWidth, let headLength, let headWidth, let tipShape, let tailShape, let style):
             var props: [(String, JSValue)] = [
                 ("type", "arrow".jsValue),
                 ("start", makeJSObj([("x", start.x.jsValue), ("y", start.y.jsValue), ("z", start.z.jsValue)])),
                 ("end", makeJSObj([("x", end.x.jsValue), ("y", end.y.jsValue), ("z", end.z.jsValue)])),
                 ("shaftWidth", Double(shaftWidth).jsValue),
                 ("headLength", Double(headLength).jsValue),
-                ("headWidth", Double(headWidth).jsValue),
-                ("color", colorToJS(color))
+                ("headWidth", Double(headWidth).jsValue)
             ]
+            addStyle(&props, style: style)
             if let tip = tipShape { props.append(("tipShape", tip.rawValue.jsValue)) }
             if let tail = tailShape { props.append(("tailShape", tail.rawValue.jsValue)) }
             array.append(makeJSObj(props))
-        case .rect(let center, let width, let height, let rotation, let color):
-            array.append(makeJSObj([
+            
+        case .rect(let center, let width, let height, let rotation, let style):
+            var props: [(String, JSValue)] = [
                 ("type", "rect".jsValue),
                 ("center", makeJSObj([("x", center.x.jsValue), ("y", center.y.jsValue), ("z", center.z.jsValue)])),
                 ("width", Double(width).jsValue),
                 ("height", Double(height).jsValue),
-                ("rotation", Double(rotation).jsValue),
-                ("color", colorToJS(color))
-            ]))
-        case .polygon(let points, let color):
+                ("rotation", Double(rotation).jsValue)
+            ]
+            addStyle(&props, style: style)
+            array.append(makeJSObj(props))
+            
+        case .polygon(let points, let style):
             let pointsArr = points.map { makeJSObj([("x", $0.x.jsValue), ("y", $0.y.jsValue), ("z", $0.z.jsValue)]) }
-            array.append(makeJSObj([
+            var props: [(String, JSValue)] = [
                 ("type", "polygon".jsValue),
-                ("points", pointsArr.jsValue),
-                ("color", colorToJS(color))
-            ]))
-        case .arc(let center, let radius, let startAngle, let endAngle, let color):
-            array.append(makeJSObj([
+                ("points", pointsArr.jsValue)
+            ]
+            addStyle(&props, style: style)
+            array.append(makeJSObj(props))
+            
+        case .arc(let center, let radius, let startAngle, let endAngle, let style):
+            var props: [(String, JSValue)] = [
                 ("type", "arc".jsValue),
                 ("center", makeJSObj([("x", center.x.jsValue), ("y", center.y.jsValue), ("z", center.z.jsValue)])),
                 ("radius", Double(radius).jsValue),
                 ("startAngle", Double(startAngle).jsValue),
-                ("endAngle", Double(endAngle).jsValue),
-                ("color", colorToJS(color))
-            ]))
-        case .wall(let start, let end, let spacing, let face, let color):
-            array.append(makeJSObj([
+                ("endAngle", Double(endAngle).jsValue)
+            ]
+            addStyle(&props, style: style)
+            array.append(makeJSObj(props))
+            
+        case .wall(let start, let end, let spacing, let face, let style):
+            var props: [(String, JSValue)] = [
                 ("type", "wall".jsValue),
                 ("start", makeJSObj([("x", start.x.jsValue), ("y", start.y.jsValue), ("z", start.z.jsValue)])),
                 ("end", makeJSObj([("x", end.x.jsValue), ("y", end.y.jsValue), ("z", end.z.jsValue)])),
                 ("spacing", Double(spacing).jsValue),
-                ("face", makeJSObj([("x", face.x.jsValue), ("y", face.y.jsValue), ("z", face.z.jsValue)])),
-                ("color", colorToJS(color))
-            ]))
+                ("face", makeJSObj([("x", face.x.jsValue), ("y", face.y.jsValue), ("z", face.z.jsValue)]))
+            ]
+            addStyle(&props, style: style)
+            array.append(makeJSObj(props))
         }
     }
     return array.jsValue
