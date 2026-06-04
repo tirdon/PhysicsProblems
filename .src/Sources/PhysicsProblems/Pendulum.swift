@@ -8,12 +8,13 @@
 import PhysicsEngine
 import Foundation
 
-class Pendulum: Entity {
+class Pendulum: PathEntity {
 	override public init() {
 		super.init()
 		self.components[PhysicsBodyComponent.self] = PhysicsBodyComponent(shape: .circle(radius: 1.0))
 		self.components[VectorComponent.self] = VectorComponent(vector: .circle(radius: 1.0))
 		self.components[RenderStyleComponent.self] = RenderStyleComponent(color: .blue)
+		self.stroke(.green, width: 1)
 	}
 }
 

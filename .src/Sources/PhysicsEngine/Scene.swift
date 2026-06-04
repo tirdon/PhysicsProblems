@@ -71,7 +71,7 @@ public struct Camera {
 	// MARK: - Entity Management
 
 	public func add(_ entity: some Entity) {
-		if let pathEntity = entity as? PathEntity {
+		if let pathEntity = entity as? PathEntity, pathEntity.style == nil {
 			let colors: [Color] = [.red, .green, .blue, .orange, .purple, .cyan, .magenta, .teal, .indigo, .yellow]
 			pathEntity.color(colors[self.entities.count % colors.count])
 		}

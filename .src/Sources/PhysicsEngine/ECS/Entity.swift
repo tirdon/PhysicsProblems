@@ -17,7 +17,7 @@ open class Entity: Hashable, Identifiable {
 	}
 
 	// MARK: Component Accessors
-	public var transform: TransformComponent? {
+	open var transform: TransformComponent? {
 		get { components[TransformComponent.self] }
 		set { components[TransformComponent.self] = newValue }
 	}
@@ -36,7 +36,7 @@ open class Entity: Hashable, Identifiable {
 
 	// MARK: Alignment
 	
-	public var position: SIMD3<Float> {
+	open var position: SIMD3<Float> {
 		get { transform?.position ?? .zero }
 		set { 
 			if var t = transform {
@@ -48,7 +48,7 @@ open class Entity: Hashable, Identifiable {
 		}
 	}
 	
-	public var rotation: Float {
+	open var rotation: Float {
 		get { 
 			guard let t = transform else { return 0 }
 			return 2 * atan2(t.orientation.z, t.orientation.w)
@@ -64,7 +64,7 @@ open class Entity: Hashable, Identifiable {
 		}
 	}
 	
-	public var magnification: SIMD3<Float> {
+	open var magnification: SIMD3<Float> {
 		get { transform?.scale ?? .one }
 		set { 
 			if var t = transform {
@@ -169,7 +169,7 @@ public class MeshEntity: Entity {
 	
 }
 
-public class PathEntity: Entity {
+open class PathEntity: Entity {
 	public var vector: VectorComponent? {
 		get { components[VectorComponent.self] }
 		set { components[VectorComponent.self] = newValue }

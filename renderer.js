@@ -395,23 +395,41 @@ export class WebGPURenderer {
    */
   _buildVertices(primitives) {
     const vertices = [];
+    const screenMax = Math.max(this._cameraWidth, this._cameraHeight);
 
     for (const prim of primitives) {
+      const strokeWidth = prim.strokeWidth !== undefined ? (Math.min(10, Math.max(0, prim.strokeWidth)) / 100.0) * screenMax : 0;
+
       switch (prim.type) {
         case 'circle':
-          this._appendCircle(vertices, prim.center, prim.radius, prim.color);
+          if (prim.strokeColor && prim.strokeColor.a > 0 && strokeWidth > 0) {
+            this._appendStrokeEllipse(vertices, prim.center, prim.radius, prim.radius, 0, strokeWidth, prim.strokeColor, prim.strokeStyle);
+          }
+          if (prim.color && prim.color.a > 0) {
+            this._appendCircle(vertices, prim.center, Math.max(0, prim.radius), prim.color);
+          }
           break;
         case 'ellipse':
-          this._appendEllipse(vertices, prim.center, prim.major, prim.minor, prim.rotation, prim.color);
+          if (prim.strokeColor && prim.strokeColor.a > 0 && strokeWidth > 0) {
+            this._appendStrokeEllipse(vertices, prim.center, prim.major, prim.minor, prim.rotation, strokeWidth, prim.strokeColor, prim.strokeStyle);
+          }
+          if (prim.color && prim.color.a > 0) {
+            this._appendEllipse(vertices, prim.center, Math.max(0, prim.major), Math.max(0, prim.minor), prim.rotation, prim.color);
+          }
           break;
         case 'line':
-          this._appendLine(vertices, prim.start, prim.end, prim.width, prim.color);
+          if (prim.strokeColor && prim.strokeColor.a > 0 && strokeWidth > 0) {
+            this._appendStrokeLine(vertices, prim.start, prim.end, Math.max(prim.width, strokeWidth), prim.strokeColor, prim.strokeStyle);
+          } else {
+            this._appendLine(vertices, prim.start, prim.end, prim.width, prim.color);
+          }
           break;
         case 'arrow':
-          this._appendArrow(vertices, prim.start, prim.end, prim.shaftWidth, prim.headLength, prim.headWidth, prim.color, prim.tipShape, prim.tailShape);
+          // Arrow stroke not perfectly defined, fallback to normal rendering but use strokeColor if present
+          this._appendArrow(vertices, prim.start, prim.end, prim.shaftWidth, prim.headLength, prim.headWidth, prim.strokeColor || prim.color, prim.tipShape, prim.tailShape);
           break;
         case 'wall':
-          this._appendWall(vertices, prim.start, prim.end, prim.spacing, prim.face, prim.color);
+          this._appendWall(vertices, prim.start, prim.end, prim.spacing, prim.face, prim.strokeColor || prim.color);
           break;
       }
     }
@@ -423,6 +441,103 @@ export class WebGPURenderer {
    * Appends a circle as a triangle fan.
    * @private
    */
+
+  _appendStrokeEllipse(vertices, center, major, minor, rotation, width, color, style = 'solid') {
+    const cosR = Math.cos(rotation);
+    const sinR = Math.sin(rotation);
+
+    let dashLength = 0.1;
+    if (style === 'dashed') dashLength = 0.15;
+    else if (style === 'dotted') dashLength = 0.05;
+
+    // Approximate circumference
+    const h = Math.pow(major - minor, 2) / Math.pow(major + minor, 2);
+    const circumference = Math.PI * (major + minor) * (1 + (3 * h) / (10 + Math.sqrt(4 - 3 * h)));
+    const segments = style === 'solid' ? 64 : Math.max(64, Math.floor(circumference / (dashLength * 0.5)));
+
+    let currentDist = 0;
+
+    for (let i = 0; i < segments; i++) {
+      const a0 = (i / segments) * Math.PI * 2;
+      const a1 = ((i + 1) / segments) * Math.PI * 2;
+      
+      const x0 = major * Math.cos(a0);
+      const y0 = minor * Math.sin(a0);
+      const x1 = major * Math.cos(a1);
+      const y1 = minor * Math.sin(a1);
+
+      const dx = x1 - x0;
+      const dy = y1 - y0;
+      const arcLen = Math.sqrt(dx*dx + dy*dy);
+
+      if (style !== 'solid') {
+        if (Math.floor(currentDist / dashLength) % 2 === 1) {
+           currentDist += arcLen;
+           continue;
+        }
+      }
+      currentDist += arcLen;
+
+      // normals
+      const len0 = Math.sqrt(Math.pow(major * Math.sin(a0), 2) + Math.pow(minor * Math.cos(a0), 2)) || 0.0001;
+      const nx0 = (minor * Math.cos(a0)) / len0;
+      const ny0 = (major * Math.sin(a0)) / len0;
+
+      const len1 = Math.sqrt(Math.pow(major * Math.sin(a1), 2) + Math.pow(minor * Math.cos(a1), 2)) || 0.0001;
+      const nx1 = (minor * Math.cos(a1)) / len1;
+      const ny1 = (major * Math.sin(a1)) / len1;
+
+      // rotate
+      const rx0 = x0 * cosR - y0 * sinR;
+      const ry0 = x0 * sinR + y0 * cosR;
+      const rx1 = x1 * cosR - y1 * sinR;
+      const ry1 = x1 * sinR + y1 * cosR;
+
+      const rnx0 = nx0 * cosR - ny0 * sinR;
+      const rny0 = nx0 * sinR + ny0 * cosR;
+      const rnx1 = nx1 * cosR - ny1 * sinR;
+      const rny1 = nx1 * sinR + ny1 * cosR;
+
+      const halfW = width * 0.5;
+
+      const p0_out = { x: center.x + rx0 + rnx0 * halfW, y: center.y + ry0 + rny0 * halfW, z: 0 };
+      const p1_out = { x: center.x + rx1 + rnx1 * halfW, y: center.y + ry1 + rny1 * halfW, z: 0 };
+      const p0_in = { x: center.x + rx0 - rnx0 * halfW, y: center.y + ry0 - rny0 * halfW, z: 0 };
+      const p1_in = { x: center.x + rx1 - rnx1 * halfW, y: center.y + ry1 - rny1 * halfW, z: 0 };
+
+      this._appendTriangle(vertices, p0_in, p0_out, p1_out, color);
+      this._appendTriangle(vertices, p0_in, p1_out, p1_in, color);
+    }
+  }
+
+  _appendStrokeLine(vertices, start, end, width, color, style = 'solid') {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 0.0001) return;
+
+    if (style === 'solid') {
+      this._appendLine(vertices, start, end, width, color);
+      return;
+    }
+
+    let dashLength = 0.1;
+    if (style === 'dashed') dashLength = 0.15;
+    else if (style === 'dotted') dashLength = 0.05;
+
+    const dirX = dx / len;
+    const dirY = dy / len;
+
+    let currentDist = 0;
+    while (currentDist < len) {
+      const nextDist = Math.min(len, currentDist + dashLength);
+      const p1 = { x: start.x + dirX * currentDist, y: start.y + dirY * currentDist, z: 0 };
+      const p2 = { x: start.x + dirX * nextDist, y: start.y + dirY * nextDist, z: 0 };
+      this._appendLine(vertices, p1, p2, width, color);
+      currentDist += dashLength * 2;
+    }
+  }
+
   _appendCircle(vertices, center, radius, color) {
     this._appendEllipse(vertices, center, radius, radius, 0, color);
   }
