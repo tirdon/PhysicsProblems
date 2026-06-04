@@ -8,24 +8,35 @@
 import PhysicsEngine
 import Foundation
 
-class Pendulum: PathEntity {
-	override public init() {
-		super.init()
-		self.components[PhysicsBodyComponent.self] = PhysicsBodyComponent(shape: .circle(radius: 1.0))
-		self.components[VectorComponent.self] = VectorComponent(vector: .circle(radius: 1.0))
-		self.components[RenderStyleComponent.self] = RenderStyleComponent(color: .blue)
-		self.stroke(.green, width: 1)
+class Pendulum: Group {
+	public let pivot: Wall
+	public let string: Line
+	public let bob: Circle
+
+	public override init(elements: [Entity] = []) {
+		let p = Wall().color(.blue)
+		let s = Line(start: p.midX * .i, end: -4.j).color(.white)
+		s.next(to: p, relative: .bottom)
+		
+		let b = Circle().color(.red)
+		b.places(at: s.target)
+		
+		self.pivot = p
+		self.string = s
+		self.bob = b
+		
+		super.init(elements: [b, s, p, b.createVisualBounds()])
 	}
 }
 
-public extension Entity {
+extension Entity {
 	var pendulumAnimation: PendulumPhysicsComponent? {
 		get { components[PendulumPhysicsComponent.self] }
 		set { components[PendulumPhysicsComponent.self] = newValue }
 	}
 }
 
-public struct PendulumPhysicsComponent: Component {
+struct PendulumPhysicsComponent: Component {
 	public var length: Float
 	public var baseAngle: Float
 	public var amplitude: Float
@@ -47,10 +58,10 @@ public struct PendulumPhysicsComponent: Component {
 	}
 }
 
-public struct PendulumAnimationSystem: System {
-	public init() {}
+struct PendulumAnimationSystem: System {
+	init() {}
 
-	public func update(context: SceneUpdateContext) {
+	func update(context: SceneUpdateContext) {
 		let boundedDelta = clamp(context.deltaTime, min: 0, max: 0.05)
 		let scene = context.scene
 

@@ -5,16 +5,64 @@
 //  Created by Thiradon Mueangmo on 3/6/2569 BE.
 //
 
+import Foundation
+
 //MARK: Arc
 public class Arc: PathEntity {
-	public init(radius: Float, startAngle: Float, endAngle: Float) {
-		super.init()
+	public var radius: Float {
+		didSet { updateVector() }
+	}
+	public var startAngle: Float {
+		didSet { updateVector() }
+	}
+	public var endAngle: Float {
+		didSet { updateVector() }
+	}
+	
+	private func updateVector() {
 		self.vector = VectorComponent(vector: .arc(radius: radius, startAngle: startAngle, endAngle: endAngle))
+	}
+	
+	public var start: SIMD3<Float> {
+		let rot = self.rotation
+		let s = self.transform?.scale ?? .one
+		let lx = radius * cos(startAngle) * s.x
+		let ly = radius * sin(startAngle) * s.y
+		return position + SIMD3<Float>(lx * cos(rot) - ly * sin(rot), lx * sin(rot) + ly * cos(rot), 0)
+	}
+	
+	public var target: SIMD3<Float> {
+		let rot = self.rotation
+		let s = self.transform?.scale ?? .one
+		let lx = radius * cos(endAngle) * s.x
+		let ly = radius * sin(endAngle) * s.y
+		return position + SIMD3<Float>(lx * cos(rot) - ly * sin(rot), lx * sin(rot) + ly * cos(rot), 0)
+	}
+
+	public init(radius: Float, startAngle: Float, endAngle: Float) {
+		self.radius = radius
+		self.startAngle = startAngle
+		self.endAngle = endAngle
+		super.init()
+		updateVector()
+	}
+
+	public convenience init(at: SIMD3<Float>, target: SIMD3<Float>, radius: Float, largeArc: Bool = false, sweep: Bool = true) {
+		let params = calculateArcParameters(at: at, target: target, radius: radius, largeArc: largeArc, sweep: sweep)
+		self.init(radius: params.actualRadius, startAngle: params.startAngle, endAngle: params.endAngle)
+		self.position = params.center
+	}
+
+	public convenience init(at: Anchor, target: Anchor, radius: Float, largeArc: Bool = false, sweep: Bool = true) {
+		self.init(at: at.resolve(), target: target.resolve(), radius: radius, largeArc: largeArc, sweep: sweep)
 	}
 
 	public override init() {
+		self.radius = 0.1
+		self.startAngle = 0
+		self.endAngle = .pi
 		super.init()
-		self.vector = VectorComponent(vector: .arc(radius: 0.1, startAngle: 0, endAngle: .pi))
+		updateVector()
 	}
 }
 
@@ -114,16 +162,16 @@ public class Triangle: Polygon {
 
 //MARK: Wall
 public class Wall: PathEntity {
-	public init(start: Anchor, end: Anchor, spacing: Float = 0.1, face: Unit = .top) {
+	public init(at: Anchor, target: Anchor, spacing: Float = 0.1, face: Unit = .top) {
 		super.init()
-		self.vector = VectorComponent(vector: .wall(start: start, end: end, spacing: spacing, face: face))
+		self.vector = VectorComponent(vector: .wall(start: at, end: target, spacing: spacing, face: face))
 	}
 
-	public convenience init(start: SIMD3<Float>, end: SIMD3<Float>, spacing: Float = 0.1, face: Unit = .top) {
-		self.init(start: .point(start), end: .point(end), spacing: spacing, face: face)
+	public convenience init(at: SIMD3<Float>, target: SIMD3<Float>, spacing: Float = 0.1, face: Unit = .top) {
+		self.init(at: .point(at), target: .point(target), spacing: spacing, face: face)
 	}
 	
 	public override convenience init() {
-		self.init(start: SIMD3<Float>(-1, 0, 0), end: SIMD3<Float>(1, 0, 0))
+		self.init(at: SIMD3<Float>(-1, 0, 0), target: SIMD3<Float>(1, 0, 0))
 	}
 }

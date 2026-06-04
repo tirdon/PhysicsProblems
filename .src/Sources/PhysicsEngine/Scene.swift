@@ -87,7 +87,21 @@ public struct Camera {
 	// MARK: - Query
 
 	public func performQuery(_ query: EntityQuery) -> [Entity] {
-		self.entities.filter(query.predicate)
+		var results = [Entity]()
+		func traverse(_ entity: Entity) {
+			if query.predicate(entity) {
+				results.append(entity)
+			}
+			if let group = entity as? Group {
+				for child in group.elements { traverse(child) }
+			} else if let hierarchy = entity as? HasHierarchy {
+				for child in hierarchy.children { traverse(child) }
+			}
+		}
+		for entity in entities {
+			traverse(entity)
+		}
+		return results
 	}
 
 	// MARK: - System Control
@@ -224,23 +238,43 @@ public struct Camera {
 
 	public func snapshot() -> SceneSnapshot {
 		var primitives: [RenderPrimitive] = []
-		primitives.reserveCapacity(entities.count)
 
-		for entity in entities {
+		func process(_ entity: Entity) {
 			let style = effectiveStyle(for: entity)
-			guard style.opacity > 0.001 else { continue }
-
-			if let vectorComponent = entity.components[VectorComponent.self] {
-				let contours = transformedContours(for: vectorComponent.path, entity: entity, segments: vectorComponent.segments)
-				if !contours.isEmpty {
-					primitives.append(.path(
-						contours: contours,
-						drawing: vectorComponent.path.drawing,
-						windingMode: vectorComponent.path.windingMode,
+			if style.opacity > 0.001 {
+				if let vectorComponent = entity.components[VectorComponent.self] {
+					let contours = transformedContours(for: vectorComponent.path, entity: entity, segments: vectorComponent.segments)
+					if !contours.isEmpty {
+						primitives.append(.path(
+							contours: contours,
+							drawing: vectorComponent.path.drawing,
+							windingMode: vectorComponent.path.windingMode,
+							style: style
+						))
+					}
+				}
+				
+				if let meshComponent = entity.components[MeshComponent.self] {
+					let transform = entity.transform ?? TransformComponent(position: .zero)
+					primitives.append(.mesh(
+						vertices: meshComponent.vertices.map { transformPoint($0, by: transform) },
+						normals: meshComponent.normals.map { transform.orientation.act($0).normalized },
+						indices: meshComponent.indices,
+						shading: meshComponent.shading,
 						style: style
 					))
 				}
 			}
+			
+			if let group = entity as? Group {
+				for child in group.elements { process(child) }
+			} else if let hierarchy = entity as? HasHierarchy {
+				for child in hierarchy.children { process(child) }
+			}
+		}
+
+		for entity in entities {
+			process(entity)
 		}
 
 		return SceneSnapshot(primitives: primitives)
@@ -249,30 +283,55 @@ public struct Camera {
 	// MARK: - Hit Testing
 
 	public func hitTest(_ point: SIMD3<Float>) -> Entity? {
-		for entity in entities.reversed() {
+		var all: [Entity] = []
+		func traverse(_ entity: Entity) {
+			all.append(entity)
+			if let group = entity as? Group {
+				for child in group.elements { traverse(child) }
+			} else if let hierarchy = entity as? HasHierarchy {
+				for child in hierarchy.children { traverse(child) }
+			}
+		}
+		for entity in entities {
+			traverse(entity)
+		}
+
+		for entity in all.reversed() {
 			guard let interaction = entity.interaction,
 				  interaction.hoverable || interaction.draggable else {
 				continue
 			}
 
 			if let physicsBody = entity.components[PhysicsBodyComponent.self], let transform = entity.transform {
+				let hitCenter = transform.position + physicsBody.offset
 				switch physicsBody.shape {
 				case .circle(let radius):
 					let hitRadius = radius + interaction.hitPadding
-					if point.distance(to: transform.position) <= hitRadius {
+					if point.distance(to: hitCenter) <= hitRadius {
 						return entity
 					}
 				case .ellipse(let major, let minor):
-					let dx = abs(point.x - transform.position.x)
-					let dy = abs(point.y - transform.position.y)
-					// Simple bounding box hit test for now
+					let dx = abs(point.x - hitCenter.x)
+					let dy = abs(point.y - hitCenter.y)
 					if dx <= major + interaction.hitPadding && dy <= minor + interaction.hitPadding {
 						return entity
 					}
 				case .rect(let width, let height):
-					let dx = abs(point.x - transform.position.x)
-					let dy = abs(point.y - transform.position.y)
+					let dx = abs(point.x - hitCenter.x)
+					let dy = abs(point.y - hitCenter.y)
 					if dx <= (width * 0.5) + interaction.hitPadding && dy <= (height * 0.5) + interaction.hitPadding {
+						return entity
+					}
+				case .boundingBox(let width, let height, let depth):
+					let dx = abs(point.x - hitCenter.x)
+					let dy = abs(point.y - hitCenter.y)
+					let dz = abs(point.z - hitCenter.z)
+					if dx <= (width * 0.5) + interaction.hitPadding && dy <= (height * 0.5) + interaction.hitPadding && dz <= (depth * 0.5) + interaction.hitPadding {
+						return entity
+					}
+				case .boundingSphere(let radius):
+					let hitRadius = radius + interaction.hitPadding
+					if point.distance(to: hitCenter) <= hitRadius {
 						return entity
 					}
 				}
@@ -307,14 +366,27 @@ public struct Camera {
 	private func transformedContours(for path: VectorPath, entity: Entity, segments: Int8) -> [RasterizedVectorContour] {
 		let curveSteps = Int(segments)
 		let contours = path.rasterizedContours(curveSteps: curveSteps)
-		guard path.coordinateSpace == .local, let transform = entity.transform else {
+		guard let transform = entity.transform else {
 			return contours
 		}
-		return contours.map { contour in
-			RasterizedVectorContour(
-				points: contour.points.map { transformPoint($0, by: transform) },
-				isClosed: contour.isClosed
-			)
+		if path.coordinateSpace == .local {
+			return contours.map { contour in
+				RasterizedVectorContour(
+					points: contour.points.map { transformPoint($0, by: transform) },
+					isClosed: contour.isClosed
+				)
+			}
+		} else {
+			// World-space paths: apply only position offset so elements
+			// move when their parent Group is shifted/moved.
+			let offset = transform.position
+			guard offset != .zero else { return contours }
+			return contours.map { contour in
+				RasterizedVectorContour(
+					points: contour.points.map { $0 + offset },
+					isClosed: contour.isClosed
+				)
+			}
 		}
 	}
 
@@ -323,15 +395,20 @@ public struct Camera {
 	}
 
 	private func pointForPathHitTest(_ point: SIMD3<Float>, path: VectorPath, entity: Entity) -> SIMD3<Float> {
-		guard path.coordinateSpace == .local, let transform = entity.transform else {
+		guard let transform = entity.transform else {
 			return point
 		}
-		let rotated = transform.orientation.inverse.act(point - transform.position)
-		return SIMD3<Float>(
-			transform.scale.x == 0 ? rotated.x : rotated.x / transform.scale.x,
-			transform.scale.y == 0 ? rotated.y : rotated.y / transform.scale.y,
-			transform.scale.z == 0 ? rotated.z : rotated.z / transform.scale.z
-		)
+		if path.coordinateSpace == .local {
+			let rotated = transform.orientation.inverse.act(point - transform.position)
+			return SIMD3<Float>(
+				transform.scale.x == 0 ? rotated.x : rotated.x / transform.scale.x,
+				transform.scale.y == 0 ? rotated.y : rotated.y / transform.scale.y,
+				transform.scale.z == 0 ? rotated.z : rotated.z / transform.scale.z
+			)
+		} else {
+			// World-space paths: subtract only position offset
+			return point - transform.position
+		}
 	}
 
 }

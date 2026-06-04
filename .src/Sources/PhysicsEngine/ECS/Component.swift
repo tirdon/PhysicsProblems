@@ -147,6 +147,25 @@ public struct RenderStyleComponent: Component {
 	}
 }
 
+public enum ShadingMode: String {
+	case flat
+	case smooth
+}
+
+public struct MeshComponent: Component {
+	public var vertices: [SIMD3<Float>]
+	public var normals: [SIMD3<Float>]
+	public var indices: [UInt16]
+	public var shading: ShadingMode
+
+	public init(vertices: [SIMD3<Float>], normals: [SIMD3<Float>] = [], indices: [UInt16] = [], shading: ShadingMode = .smooth) {
+		self.vertices = vertices
+		self.normals = normals
+		self.indices = indices
+		self.shading = shading
+	}
+}
+
 public struct InteractionComponent: Component {
 	public var hoverable: Bool
 	public var draggable: Bool
@@ -184,14 +203,25 @@ public struct PhysicsBodyComponent: Component {
 		case circle(radius: Float)
 		case rect(width: Float, height: Float)
 		case ellipse(major: Float, minor: Float)
+		case boundingBox(width: Float, height: Float, depth: Float)
+		case boundingSphere(radius: Float)
 	}
 	public var shape: Shape
+	public var offset: SIMD3<Float>
 
-	public init(shape: Shape) {
+	public init(shape: Shape, offset: SIMD3<Float> = .zero) {
 		self.shape = shape
+		self.offset = offset
 	}
 }
 
 public struct PhysicsMotionComponent: Component {
 	public init() {}
+}
+
+public struct BoundingVisualizerComponent: Component {
+	public weak var target: Entity?
+	public init(target: Entity? = nil) {
+		self.target = target
+	}
 }

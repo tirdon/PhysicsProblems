@@ -131,6 +131,12 @@ public extension AnimationTrack {
 	}
 }
 
+extension AnimationClip: @preconcurrency CustomDebugStringConvertible {
+	@MainActor public var debugDescription: String {
+		return "AnimationClip(duration: \(duration), tracks: \(tracks.count))"
+	}
+}
+
 //MARK: - Track
 
 @MainActor public class KeyframeTrack<Value>: AnimationTrack {
@@ -257,26 +263,12 @@ public extension AnimationTrack {
 	@MainActor public override func begin(in scene: SceneWorld) {
 		super.begin(in: scene)
 		
-		var w: Float = 0
-		var h: Float = 0
-		if let body = entity.components[PhysicsBodyComponent.self] {
-			switch body.shape {
-			case .circle(let radius):
-				w = radius
-				h = radius
-			case .ellipse(let major, let minor):
-				w = major
-				h = minor
-			case .rect(let width, let height):
-				w = width / 2
-				h = height / 2
-			}
-		}
+		let bounds = Entity.entityBounds(of: entity)
 		
-		let minX = -scene.size.x / 2 + w + padding
-		let maxX = scene.size.x / 2 - w - padding
-		let minY = -scene.size.y / 2 + h + padding
-		let maxY = scene.size.y / 2 - h - padding
+		let minX = -scene.size.x / 2 - bounds.min.x + padding
+		let maxX = scene.size.x / 2 - bounds.max.x - padding
+		let minY = -scene.size.y / 2 - bounds.min.y + padding
+		let maxY = scene.size.y / 2 - bounds.max.y - padding
 		
 		var targetPos = startPosition
 		if direction.x > 0 { targetPos.x = maxX }

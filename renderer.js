@@ -164,6 +164,36 @@ class VertexArray {
   }
 }
 
+class MeshVertexArray {
+  constructor(initialCapacity = 16384) {
+    this.capacity = initialCapacity;
+    this.buffer = new Float32Array(this.capacity * 10);
+    this.count = 0;
+  }
+  ensure(additionalVertices) {
+    if (this.count + additionalVertices > this.capacity) {
+      let newCapacity = this.capacity;
+      while (this.count + additionalVertices > newCapacity) newCapacity *= 2;
+      const newBuffer = new Float32Array(newCapacity * 10);
+      newBuffer.set(this.buffer.subarray(0, this.count * 10));
+      this.buffer = newBuffer;
+      this.capacity = newCapacity;
+    }
+  }
+  push(x, y, z, nx, ny, nz, r, g, b, a) {
+    this.ensure(1);
+    let i = this.count * 10;
+    const b_ = this.buffer;
+    b_[i++] = x; b_[i++] = y; b_[i++] = z;
+    b_[i++] = nx; b_[i++] = ny; b_[i++] = nz;
+    b_[i++] = r; b_[i++] = g; b_[i++] = b; b_[i++] = a;
+    this.count++;
+  }
+  clear() {
+    this.count = 0;
+  }
+}
+
 // MARK: - WebGPURenderer
 
 export class WebGPURenderer {
@@ -240,20 +270,63 @@ export class WebGPURenderer {
       primitive: {
         topology: 'triangle-list',
       },
+      depthStencil: {
+        depthWriteEnabled: false,
+        depthCompare: 'always',
+        format: 'depth24plus',
+      },
     });
 
-    return new WebGPURenderer(canvas, context, device, pipeline, format);
+    const meshShaderModule = device.createShaderModule({ code: MESH_SHADER_SOURCE });
+    const meshPipeline = device.createRenderPipeline({
+      layout: 'auto',
+      vertex: {
+        module: meshShaderModule,
+        entryPoint: 'vs_main',
+        buffers: [{
+          arrayStride: 10 * 4,
+          attributes: [
+            { shaderLocation: 0, offset: 0, format: 'float32x3' },
+            { shaderLocation: 1, offset: 12, format: 'float32x3' },
+            { shaderLocation: 2, offset: 24, format: 'float32x4' },
+          ],
+        }],
+      },
+      fragment: {
+        module: meshShaderModule,
+        entryPoint: 'fs_main',
+        targets: [{
+          format,
+          blend: {
+            color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+            alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+          },
+        }],
+      },
+      primitive: {
+        topology: 'triangle-list',
+        cullMode: 'back',
+      },
+      depthStencil: {
+        depthWriteEnabled: true,
+        depthCompare: 'less',
+        format: 'depth24plus',
+      },
+    });
+
+    return new WebGPURenderer(canvas, context, device, pipeline, meshPipeline, format);
   }
 
   /**
    * @private
    */
-  constructor(canvas, context, device, pipeline, format) {
+  constructor(canvas, context, device, pipeline, meshPipeline, format) {
     this.canvas = canvas;
     this.context = context;
     this.device = device;
     this.queue = device.queue;
     this.pipeline = pipeline;
+    this.meshPipeline = meshPipeline;
     this.format = format;
 
     // Vertex buffer management
@@ -287,16 +360,19 @@ export class WebGPURenderer {
 
     if (!this.meshVertices) this.meshVertices = new VertexArray();
     if (!this.pathVertices) this.pathVertices = new VertexArray();
+    if (!this.trueMeshVertices) this.trueMeshVertices = new MeshVertexArray();
 
     this.meshVertices.clear();
     this.pathVertices.clear();
+    this.trueMeshVertices.clear();
 
-    this._buildMeshVertices(primitives, this.meshVertices);
+    this._buildMeshVertices(primitives, this.meshVertices, this.trueMeshVertices);
     this._buildPathVertices(primitives, this.pathVertices);
-    if (this.meshVertices.count === 0 && this.pathVertices.count === 0) return;
+    if (this.meshVertices.count === 0 && this.pathVertices.count === 0 && this.trueMeshVertices.count === 0) return;
 
     const meshBuffer = this._uploadVertices(this.meshVertices, 'mesh');
     const pathBuffer = this._uploadVertices(this.pathVertices, 'path');
+    const trueMeshBuffer = this._uploadVertices(this.trueMeshVertices, 'trueMesh', 10);
 
     // Create command encoder and render pass
     const encoder = this.device.createCommandEncoder();
@@ -309,7 +385,16 @@ export class WebGPURenderer {
         loadOp: 'clear',
         storeOp: 'store',
       }],
+      depthStencilAttachment: {
+        view: this.depthTextureView,
+        depthClearValue: 1.0,
+        depthLoadOp: 'clear',
+        depthStoreOp: 'store',
+      },
     });
+
+    pass.setPipeline(this.meshPipeline);
+    this._drawUploadedVertices(pass, trueMeshBuffer, this.trueMeshVertices);
 
     pass.setPipeline(this.pipeline);
     this._drawUploadedVertices(pass, meshBuffer, this.meshVertices);
@@ -495,22 +580,28 @@ export class WebGPURenderer {
     this.viewportWidth = width;
     this.viewportHeight = height;
 
-    if (this.canvas.width !== width) {
+    if (this.canvas.width !== width || this.canvas.height !== height || !this.depthTexture) {
       this.canvas.width = width;
-    }
-    if (this.canvas.height !== height) {
       this.canvas.height = height;
+
+      if (this.depthTexture) this.depthTexture.destroy();
+      this.depthTexture = this.device.createTexture({
+        size: [width, height],
+        format: 'depth24plus',
+        usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+      this.depthTextureView = this.depthTexture.createView();
     }
   }
 
   /**
    * Ensures the vertex buffer is large enough.
-   * @param {VertexArray} vertexArray
+   * @param {VertexArray|MeshVertexArray} vertexArray
    * @private
    */
-  _uploadVertices(vertexArray, kind = 'mesh') {
+  _uploadVertices(vertexArray, kind = 'mesh', floatsPerVertex = FLOATS_PER_VERTEX) {
     if (vertexArray.count === 0) return null;
-    const floatCount = vertexArray.count * FLOATS_PER_VERTEX;
+    const floatCount = vertexArray.count * floatsPerVertex;
     const buffer = this._ensureVertexBuffer(floatCount, kind);
     if (!buffer) return null;
 
@@ -525,9 +616,10 @@ export class WebGPURenderer {
   }
 
   _ensureVertexBuffer(floatCount, kind = 'mesh') {
-    const bufferKey = kind === 'path' ? 'pathVertexBuffer' : 'vertexBuffer';
-    const capacityKey = kind === 'path' ? 'pathVertexCapacity' : 'vertexCapacity';
+    const bufferKey = kind + 'Buffer';
+    const capacityKey = kind + 'Capacity';
 
+    if (!this[capacityKey]) this[capacityKey] = 0;
     if (floatCount <= this[capacityKey]) return this[bufferKey];
 
     let capacity = Math.max(1024, this[capacityKey]);
@@ -547,13 +639,39 @@ export class WebGPURenderer {
    * Builds the flat vertex array from primitives.
    * @param {Array} primitives
    * @param {VertexArray} vertices
+   * @param {MeshVertexArray} trueMeshVertices
    * @private
    */
-  _buildMeshVertices(primitives, vertices) {
+  _buildMeshVertices(primitives, vertices, trueMeshVertices) {
     const screenMax = Math.max(this._cameraWidth, this._cameraHeight);
 
     for (const prim of primitives) {
       if (prim.type === 'path') continue;
+      
+      if (prim.type === 'mesh') {
+        const verts = prim.vertices;
+        const norms = prim.normals;
+        const inds = prim.indices;
+        const color = prim.color || { r: 1, g: 1, b: 1, a: 1 };
+        
+        if (inds && inds.length > 0) {
+          for (let i = 0; i < inds.length; i++) {
+            const idx = inds[i];
+            const v = verts[idx];
+            const n = norms[idx] || { x: 0, y: 0, z: 1 };
+            
+            // Project world point to clip space for WebGPU
+            let clip = this._project(v);
+            
+            trueMeshVertices.push(
+              clip.x, clip.y, clip.z,
+              n.x, n.y, n.z,
+              color.r, color.g, color.b, color.a
+            );
+          }
+        }
+        continue;
+      }
       const strokeWidth = prim.strokeWidth !== undefined ? (Math.min(10, Math.max(0, prim.strokeWidth)) / 100.0) * screenMax : 0;
 
       switch (prim.type) {

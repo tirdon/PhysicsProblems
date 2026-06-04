@@ -15,6 +15,7 @@
 		let scene = SceneWorld()
 		// Register built-in systems
 		scene.registerSystem(AnimationSystem.self)
+		scene.registerSystem(BoundingVisualizerSystem.self)
 		scenes.append(scene)
 		Task {
 			await callback(scene)
@@ -24,6 +25,7 @@
 	public func newScene() -> SceneWorld {
 		let scene = SceneWorld()
 		scene.registerSystem(AnimationSystem.self)
+		scene.registerSystem(BoundingVisualizerSystem.self)
 		scenes.append(scene)
 		return scene
 	}

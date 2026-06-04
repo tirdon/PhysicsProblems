@@ -11,36 +11,33 @@ struct PhysicsProblems {
     @MainActor static var onMoveClosure: JSClosure?
     @MainActor static var onDownClosure: JSClosure?
     @MainActor static var onUpClosure: JSClosure?
-
     static func main() {
         JavaScriptEventLoop.installGlobalExecutor()
         Task {
             let engine = Engine { scene in
                 scene.registerSystem(PendulumAnimationSystem.self)
 
-				let circle = Pendulum()
-                scene.add(circle)
-				scene.add(Wall())
+				let pendulum = Pendulum()
+                scene.add(pendulum)
 
-                scene.play(circle.shift(1.i + 2.j, easing: .easeOut))
-				
-                scene.play(circle.move(to: .origin, easing: .easeInOut))
+                scene.play(pendulum.shift(1.i + 2.j, easing: .easeOut))
+                scene.play(pendulum.move(to: .origin, easing: .easeInOut))
                 await scene.wait()
                 
-                circle.pendulumAnimation = PendulumPhysicsComponent(
-                    length: 4.0,
+				pendulum.first(where: { $0 is Circle })?.components[PendulumPhysicsComponent.self] = PendulumPhysicsComponent(
+					length: pendulum.string.length,
                     baseAngle: 0,
                     amplitude: 0.28,
                     period: 2.4
                 )
 				
-				circle.interaction = InteractionComponent(
+				pendulum.first(where: { $0 is Circle })?.interaction = InteractionComponent(
 					hoverable: true, draggable: true, pauseAnimationOnHover: true
 				)
 				
 				await scene.wait(second: 4)
 				await scene.pause(system: PendulumAnimationSystem.self)
-				scene.play(circle.edge(to: .bottom, easing: .easeIn))
+				scene.play(pendulum.edge(to: .bottom, easing: .easeIn))
             }
 
             // Set up JS renderer and animation loop
@@ -242,6 +239,20 @@ private func primitivesToJSArray(_ primitives: [RenderPrimitive]) -> JSValue {
             }
             addStyle(&props, style: style)
             array.append(makeJSObj(props))
+            
+        case .mesh(let vertices, let normals, let indices, let shading, let style):
+            let vArr = vertices.map { makeJSObj([("x", $0.x.jsValue), ("y", $0.y.jsValue), ("z", $0.z.jsValue)]) }
+            let nArr = normals.map { makeJSObj([("x", $0.x.jsValue), ("y", $0.y.jsValue), ("z", $0.z.jsValue)]) }
+            let iArr = indices.map { Double($0).jsValue }
+            var props: [(String, JSValue)] = [
+                ("type", "mesh".jsValue),
+                ("vertices", vArr.jsValue),
+                ("normals", nArr.jsValue),
+                ("indices", iArr.jsValue),
+                ("shading", shading.rawValue.jsValue)
+            ]
+            addStyle(&props, style: style)
+            array.append(makeJSObj(props))
         }
     }
     return array.jsValue
@@ -273,7 +284,7 @@ private func makeJSObj(_ entries: [(String, JSValue)]) -> JSValue {
     if scene.draggedEntity != nil {
         style.cursor = "grabbing".jsValue
     } else if let hovered = scene.hoveredEntity,
-        hovered.components[PhysicsBodyComponent.self] != nil {
+        hovered.interaction?.draggable == true {
         style.cursor = "grab".jsValue
     } else {
         style.cursor = "default".jsValue

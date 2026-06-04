@@ -20,17 +20,12 @@ public enum Anchor {
 		case .entity(let entity, let directionUnit, let offset):
 			let direction = directionUnit.vector
 			let basePos = entity.transform?.position ?? .zero
-			var sizeOffset: SIMD3<Float> = .zero
-			if let body = entity.components[PhysicsBodyComponent.self] {
-				switch body.shape {
-				case .circle(let radius):
-					sizeOffset = direction * radius
-				case .ellipse(let major, let minor):
-					sizeOffset = SIMD3<Float>(direction.x * major, direction.y * minor, direction.z)
-				case .rect(let width, let height):
-					sizeOffset = SIMD3<Float>(direction.x * width / 2, direction.y * height / 2, direction.z)
-				}
-			}
+			let size = Entity.entitySize(of: entity)
+			let sizeOffset = SIMD3<Float>(
+				direction.x * size.x / 2,
+				direction.y * size.y / 2,
+				0
+			)
 			return basePos + sizeOffset + (direction * offset)
 		}
 	}
@@ -187,6 +182,37 @@ public func distanceFromPointToSegment(_ point: SIMD3<Float>, _ start: SIMD3<Flo
 	return point.distance(to: projection)
 }
 
+public func calculateArcParameters(at: SIMD3<Float>, target: SIMD3<Float>, radius: Float, largeArc: Bool = false, sweep: Bool = true) -> (center: SIMD3<Float>, startAngle: Float, endAngle: Float, actualRadius: Float) {
+	var r = abs(radius)
+	let dVec = target - at
+	let d = sqrt(dVec.x * dVec.x + dVec.y * dVec.y)
+	if d == 0 { return (at, 0, 0, r) }
+	
+	if d > 2 * r {
+		r = d / 2 // clamp radius
+	}
+	
+	let m = (at + target) / 2
+	let hSq = r * r - (d / 2) * (d / 2)
+	let h = hSq > 0 ? sqrt(hSq) : 0
+	
+	let n = SIMD3<Float>(-dVec.y, dVec.x, 0).normalized
+	
+	let sign: Float = (largeArc == sweep) ? -1.0 : 1.0
+	let center = m + n * (h * sign)
+	
+	let startAngle = atan2(at.y - center.y, at.x - center.x)
+	var endAngle = atan2(target.y - center.y, target.x - center.x)
+	
+	if sweep {
+		if endAngle < startAngle { endAngle += 2 * .pi }
+	} else {
+		if endAngle > startAngle { endAngle -= 2 * .pi }
+	}
+	
+	return (center, startAngle, endAngle, r)
+}
+
 // MARK: - Render Primitives
 
 public enum ArrowShape: String {
@@ -205,6 +231,7 @@ public enum RenderPrimitive {
 	case polygon(points: [SIMD3<Float>], style: RenderStyleComponent)
 	case arc(center: SIMD3<Float>, radius: Float, startAngle: Float, endAngle: Float, style: RenderStyleComponent)
 	case wall(start: SIMD3<Float>, end: SIMD3<Float>, spacing: Float, face: SIMD3<Float>, style: RenderStyleComponent)
+	case mesh(vertices: [SIMD3<Float>], normals: [SIMD3<Float>], indices: [UInt16], shading: ShadingMode, style: RenderStyleComponent)
 	case path(contours: [RasterizedVectorContour], drawing: VectorPath.Drawing, windingMode: VectorPath.WindingMode, style: RenderStyleComponent)
 }
 

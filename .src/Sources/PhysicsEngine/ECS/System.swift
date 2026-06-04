@@ -60,3 +60,25 @@ public struct AnimationSystem: System {
 		scene.advanceAnimations(deltaTime: context.deltaTime)
 	}
 }
+
+/// Automatically updates visual bounding boxes to follow their targets
+public struct BoundingVisualizerSystem: System {
+	public init() {}
+
+	public func update(context: SceneUpdateContext) {
+		let scene = context.scene
+		for visual in scene.performQuery(.has(BoundingVisualizerComponent.self)) {
+			if let target = visual.components[BoundingVisualizerComponent.self]?.target {
+				let bounds = Entity.entityBounds(of: target)
+				let center = (bounds.min + bounds.max) / 2
+				visual.position = target.position + center
+				
+				let size = Entity.entitySize(of: target)
+				if var vector = visual.components[VectorComponent.self] {
+					vector.path = .rect(width: size.x, height: size.y)
+					visual.components[VectorComponent.self] = vector
+				}
+			}
+		}
+	}
+}
