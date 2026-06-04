@@ -113,11 +113,11 @@ import Foundation
     scene.pointerMoved(to: bobPos)
 
     let visibleSnapshot = scene.snapshot()
-    let arrowCount = visibleSnapshot.primitives.filter {
-        if case .arrow = $0 { return true }
+    let pathCount = visibleSnapshot.primitives.filter {
+        if case .path = $0 { return true }
         return false
     }.count
-    #expect(arrowCount == 2)
+    #expect(pathCount == 3)
 }
 
 @MainActor
@@ -141,4 +141,69 @@ import Foundation
     let moveTrack = move.tracks[0] as! MoveTrack
     #expect(moveTrack.isRelative == false)
     #expect(moveTrack.target == .zero)
+}
+
+@Test func vectorComponentStoresRasterizablePath() async throws {
+    let vector = VectorComponent(vector: .circle(radius: 0.5))
+    let points = vector.path.rasterize(curveSteps: 24)
+
+    #expect(points.count == 24)
+    #expect(vector.path.contains(.zero))
+    #expect(!vector.path.contains(SIMD3<Float>(1, 1, 0)))
+}
+
+@Test func bezierPathRasterizesCurves() async throws {
+    let path = VectorPath.bezier(
+        start: .point(.zero),
+        segments: [
+            .cubicCurve(
+                to: .point(SIMD3<Float>(1, 0, 0)),
+                control1: .point(SIMD3<Float>(0, 1, 0)),
+                control2: .point(SIMD3<Float>(1, 1, 0))
+            )
+        ]
+    )
+
+    let points = path.rasterize(curveSteps: 8)
+    #expect(points.count == 9)
+    #expect(points.first == .zero)
+    #expect(points.last == SIMD3<Float>(1, 0, 0))
+}
+
+@Test func pathsCanMorphThroughRasterizedSamples() async throws {
+    let square = VectorPath.rect(width: 1, height: 1)
+    let circle = VectorPath.circle(radius: 0.5)
+    let morphed = square.interpolated(to: circle, progress: 0.5, samples: 32)
+
+    #expect(morphed.rasterize().count == 32)
+    #expect(morphed.contains(.zero))
+}
+
+@Test func pathBooleanOperatorsRasterizeResults() async throws {
+    let left = VectorPath.contour(points: [
+        SIMD3<Float>(-1, -1, 0),
+        SIMD3<Float>(1, -1, 0),
+        SIMD3<Float>(1, 1, 0),
+        SIMD3<Float>(-1, 1, 0)
+    ], isClosed: true)
+    let right = VectorPath.contour(points: [
+        SIMD3<Float>(0, -1, 0),
+        SIMD3<Float>(2, -1, 0),
+        SIMD3<Float>(2, 1, 0),
+        SIMD3<Float>(0, 1, 0)
+    ], isClosed: true)
+
+    let union = left + right
+    let intersection = left * right
+    let difference = left - right
+    let symmetricDifference = left ^^ right
+
+    #expect(union.contains(SIMD3<Float>(-0.5, 0, 0)))
+    #expect(union.contains(SIMD3<Float>(1.5, 0, 0)))
+    #expect(intersection.contains(SIMD3<Float>(0.5, 0, 0)))
+    #expect(!intersection.contains(SIMD3<Float>(-0.5, 0, 0)))
+    #expect(difference.contains(SIMD3<Float>(-0.5, 0, 0)))
+    #expect(!difference.contains(SIMD3<Float>(0.5, 0, 0)))
+    #expect(symmetricDifference.contains(SIMD3<Float>(-0.5, 0, 0)))
+    #expect(!symmetricDifference.contains(SIMD3<Float>(0.5, 0, 0)))
 }

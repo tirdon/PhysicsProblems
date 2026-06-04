@@ -231,54 +231,12 @@ public struct Camera {
 			guard style.opacity > 0.001 else { continue }
 
 			if let vectorComponent = entity.components[VectorComponent.self] {
-				switch vectorComponent.vector {
-				case .circle(let radius):
-					if let transform = entity.transform {
-						primitives.append(.circle(center: transform.position, radius: radius, style: style))
-					}
-				case .ellipse(let major, let minor):
-					if let transform = entity.transform {
-						// For now, assume 0 rotation since it requires extracting from quaternion
-						primitives.append(.ellipse(center: transform.position, major: major, minor: minor, rotation: 0, style: style))
-					}
-				case .line(let start, let end, let width):
-					primitives.append(.line(
-						start: start.resolve(),
-						end: end.resolve(),
-						width: width,
-						style: style
-					))
-				case .arrow(let start, let end, let shaftWidth, let headLength, let headWidth, let tipShape, let tailShape):
-					primitives.append(.arrow(
-						start: start.resolve(),
-						end: end.resolve(),
-						shaftWidth: shaftWidth,
-						headLength: headLength,
-						headWidth: headWidth,
-						tipShape: tipShape,
-						tailShape: tailShape,
-						style: style
-					))
-				case .rect(let width, let height):
-					if let transform = entity.transform {
-						primitives.append(.rect(center: transform.position, width: width, height: height, rotation: 0, style: style))
-					}
-				case .polygon(let points):
-					if let transform = entity.transform {
-						let absolutePoints = points.map { $0 + transform.position }
-						primitives.append(.polygon(points: absolutePoints, style: style))
-					}
-				case .arc(let radius, let startAngle, let endAngle):
-					if let transform = entity.transform {
-						primitives.append(.arc(center: transform.position, radius: radius, startAngle: startAngle, endAngle: endAngle, style: style))
-					}
-				case .wall(let start, let end, let spacing, let faceUnit):
-					let face = entity.transform?.orientation.act(faceUnit.vector) ?? faceUnit.vector
-					primitives.append(.wall(
-						start: start.resolve(),
-						end: end.resolve(),
-						spacing: spacing,
-						face: face,
+				let contours = transformedContours(for: vectorComponent.path, entity: entity, segments: vectorComponent.segments)
+				if !contours.isEmpty {
+					primitives.append(.path(
+						contours: contours,
+						drawing: vectorComponent.path.drawing,
+						windingMode: vectorComponent.path.windingMode,
 						style: style
 					))
 				}
@@ -322,70 +280,10 @@ public struct Camera {
 			}
 
 			if let vectorComponent = entity.components[VectorComponent.self] {
-				switch vectorComponent.vector {
-				case .circle(let radius):
-					if let transform = entity.transform {
-						let hitRadius = radius + interaction.hitPadding
-						if point.distance(to: transform.position) <= hitRadius {
-							return entity
-						}
-					}
-				case .ellipse(let major, let minor):
-					if let transform = entity.transform {
-						let dx = abs(point.x - transform.position.x)
-						let dy = abs(point.y - transform.position.y)
-						if dx <= major + interaction.hitPadding && dy <= minor + interaction.hitPadding {
-							return entity
-						}
-					}
-				case .line(let start, let end, let width):
-					let distance = distanceFromPointToSegment(point, start.resolve(), end.resolve())
-					if distance <= width * 0.5 + interaction.hitPadding {
-						return entity
-					}
-				case .arrow(let start, let end, _, _, let headWidth, _, _):
-					let distance = distanceFromPointToSegment(point, start.resolve(), end.resolve())
-					if distance <= headWidth * 0.5 + interaction.hitPadding {
-						return entity
-					}
-				case .rect(let width, let height):
-					if let transform = entity.transform {
-						let dx = abs(point.x - transform.position.x)
-						let dy = abs(point.y - transform.position.y)
-						if dx <= (width * 0.5) + interaction.hitPadding && dy <= (height * 0.5) + interaction.hitPadding {
-							return entity
-						}
-					}
-				case .polygon(let points):
-					if let transform = entity.transform {
-						var minX: Float = .greatestFiniteMagnitude
-						var maxX: Float = -.greatestFiniteMagnitude
-						var minY: Float = .greatestFiniteMagnitude
-						var maxY: Float = -.greatestFiniteMagnitude
-						for p in points {
-							minX = min(minX, p.x)
-							maxX = max(maxX, p.x)
-							minY = min(minY, p.y)
-							maxY = max(maxY, p.y)
-						}
-						let localPoint = point - transform.position
-						if localPoint.x >= minX - interaction.hitPadding && localPoint.x <= maxX + interaction.hitPadding &&
-						   localPoint.y >= minY - interaction.hitPadding && localPoint.y <= maxY + interaction.hitPadding {
-							return entity
-						}
-					}
-				case .arc(let radius, _, _):
-					if let transform = entity.transform {
-						let hitRadius = radius + interaction.hitPadding
-						if point.distance(to: transform.position) <= hitRadius {
-							return entity
-						}
-					}
-				case .wall(let start, let end, _, _):
-					let distance = distanceFromPointToSegment(point, start.resolve(), end.resolve())
-					if distance <= 0.1 + interaction.hitPadding {
-						return entity
-					}
+				let localPoint = pointForPathHitTest(point, path: vectorComponent.path, entity: entity)
+				let curveSteps = Int(vectorComponent.segments)
+				if vectorComponent.path.contains(localPoint, tolerance: interaction.hitPadding, curveSteps: curveSteps) {
+					return entity
 				}
 			}
 		}
@@ -406,6 +304,35 @@ public struct Camera {
 		return style
 	}
 
+	private func transformedContours(for path: VectorPath, entity: Entity, segments: Int8) -> [RasterizedVectorContour] {
+		let curveSteps = Int(segments)
+		let contours = path.rasterizedContours(curveSteps: curveSteps)
+		guard path.coordinateSpace == .local, let transform = entity.transform else {
+			return contours
+		}
+		return contours.map { contour in
+			RasterizedVectorContour(
+				points: contour.points.map { transformPoint($0, by: transform) },
+				isClosed: contour.isClosed
+			)
+		}
+	}
+
+	private func transformPoint(_ point: SIMD3<Float>, by transform: TransformComponent) -> SIMD3<Float> {
+		transform.position + transform.orientation.act(point * transform.scale)
+	}
+
+	private func pointForPathHitTest(_ point: SIMD3<Float>, path: VectorPath, entity: Entity) -> SIMD3<Float> {
+		guard path.coordinateSpace == .local, let transform = entity.transform else {
+			return point
+		}
+		let rotated = transform.orientation.inverse.act(point - transform.position)
+		return SIMD3<Float>(
+			transform.scale.x == 0 ? rotated.x : rotated.x / transform.scale.x,
+			transform.scale.y == 0 ? rotated.y : rotated.y / transform.scale.y,
+			transform.scale.z == 0 ? rotated.z : rotated.z / transform.scale.z
+		)
+	}
 
 }
 

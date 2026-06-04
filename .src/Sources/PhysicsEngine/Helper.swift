@@ -205,6 +205,7 @@ public enum RenderPrimitive {
 	case polygon(points: [SIMD3<Float>], style: RenderStyleComponent)
 	case arc(center: SIMD3<Float>, radius: Float, startAngle: Float, endAngle: Float, style: RenderStyleComponent)
 	case wall(start: SIMD3<Float>, end: SIMD3<Float>, spacing: Float, face: SIMD3<Float>, style: RenderStyleComponent)
+	case path(contours: [RasterizedVectorContour], drawing: VectorPath.Drawing, windingMode: VectorPath.WindingMode, style: RenderStyleComponent)
 }
 
 public struct SceneSnapshot {
@@ -214,5 +215,3 @@ public struct SceneSnapshot {
 		self.primitives = primitives
 	}
 }
-
-

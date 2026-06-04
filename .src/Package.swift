@@ -17,9 +17,9 @@ let package = Package(
 				.product(name: "JavaScriptEventLoop", package: "JavaScriptKit"),
 				.target(name: "PhysicsEngine")
 			],
-			swiftSettings: [
-				.enableExperimentalFeature("Extern")
-			],
+//			swiftSettings: [
+//				.enableExperimentalFeature("Extern")
+//			],
 			plugins: [
 				.plugin(name: "BridgeJS", package: "JavaScriptKit")
 			]

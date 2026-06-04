@@ -44,7 +44,7 @@ struct PhysicsProblems {
             }
 
             // Set up JS renderer and animation loop
-            guard let primaryScene = engine.primaryScene else { return }
+            guard let primaryScene = engine.primary else { return }
 
             do {
                 let renderer = try await createJSRenderer(canvasID: "main-canvas")
@@ -215,6 +215,31 @@ private func primitivesToJSArray(_ primitives: [RenderPrimitive]) -> JSValue {
                 ("spacing", Double(spacing).jsValue),
                 ("face", makeJSObj([("x", face.x.jsValue), ("y", face.y.jsValue), ("z", face.z.jsValue)]))
             ]
+            addStyle(&props, style: style)
+            array.append(makeJSObj(props))
+
+        case .path(let contours, let drawing, let windingMode, let style):
+            let contoursArray = contours.map { contour in
+                let pointsArray = contour.points.map {
+                    makeJSObj([("x", $0.x.jsValue), ("y", $0.y.jsValue), ("z", $0.z.jsValue)])
+                }
+                return makeJSObj([
+                    ("points", pointsArray.jsValue),
+                    ("closed", contour.isClosed.jsValue)
+                ])
+            }
+            var props: [(String, JSValue)] = [
+                ("type", "path".jsValue),
+                ("contours", contoursArray.jsValue),
+                ("windingMode", windingMode.rawValue.jsValue)
+            ]
+            switch drawing {
+            case .fill:
+                props.append(("drawing", "fill".jsValue))
+            case .stroke(let width):
+                props.append(("drawing", "stroke".jsValue))
+                props.append(("pathStrokeWidth", Double(width).jsValue))
+            }
             addStyle(&props, style: style)
             array.append(makeJSObj(props))
         }

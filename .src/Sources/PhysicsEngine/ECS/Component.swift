@@ -55,6 +55,7 @@ public struct TransformComponent: Component {
 
 public struct VectorComponent: Component {
 	public enum Vector {
+		case path(VectorPath)
 		case circle(radius: Float)
 		case ellipse(major: Float, minor: Float)
 		case line(start: Anchor, end: Anchor, width: Float)
@@ -63,11 +64,54 @@ public struct VectorComponent: Component {
 		case polygon(points: [SIMD3<Float>])
 		case arc(radius: Float, startAngle: Float, endAngle: Float)
 		case wall(start: Anchor, end: Anchor, spacing: Float, face: Unit)
-	}
-	public var vector: Vector
 
-	public init(vector: Vector) {
-		self.vector = vector
+		public var path: VectorPath {
+			switch self {
+			case .path(let path):
+				return path
+			case .circle(let radius):
+				return .circle(radius: radius)
+			case .ellipse(let major, let minor):
+				return .ellipse(major: major, minor: minor)
+			case .line(let start, let end, let width):
+				return .line(start: start, end: end, width: width)
+			case .arrow(let start, let end, let shaftWidth, let headLength, let headWidth, let tipShape, let tailShape):
+				return .arrow(
+					start: start,
+					end: end,
+					shaftWidth: shaftWidth,
+					headLength: headLength,
+					headWidth: headWidth,
+					tipShape: tipShape,
+					tailShape: tailShape
+				)
+			case .rect(let width, let height):
+				return .rect(width: width, height: height)
+			case .polygon(let points):
+				return .polygon(points: points)
+			case .arc(let radius, let startAngle, let endAngle):
+				return .arc(radius: radius, startAngle: startAngle, endAngle: endAngle)
+			case .wall(let start, let end, let spacing, let face):
+				return .wall(start: start, end: end, spacing: spacing, face: face)
+			}
+		}
+	}
+	public var path: VectorPath
+	public var segments: Int8 = 64
+
+	public var vector: Vector {
+		get { .path(path) }
+		set { path = newValue.path }
+	}
+
+	public init(vector: Vector, segments: Int8 = 64) {
+		self.path = vector.path
+		self.segments = segments
+	}
+
+	public init(path: VectorPath, segments: Int8 = 64) {
+		self.path = path
+		self.segments = segments
 	}
 }
 

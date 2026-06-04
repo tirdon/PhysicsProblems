@@ -29,7 +29,7 @@
 	}
 
 	/// Get the first (primary) scene
-	public var primaryScene: SceneWorld? {
+	public var primary: SceneWorld? {
 		scenes.first
 	}
 }

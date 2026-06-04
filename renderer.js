@@ -9,12 +9,22 @@
 const SHADER_SOURCE = `
 struct VertexInput {
   @location(0) position: vec2f,
-  @location(1) color: vec4f,
+  @location(1) world_pos: vec2f,
+  @location(2) pA: vec2f,
+  @location(3) pB: vec2f,
+  @location(4) width: f32,
+  @location(5) color: vec4f,
+  @location(6) params: vec2f, // x = type, y = rotation
 }
 
 struct VertexOutput {
   @builtin(position) position: vec4f,
   @location(0) color: vec4f,
+  @location(1) world_pos: vec2f,
+  @location(2) pA: vec2f,
+  @location(3) pB: vec2f,
+  @location(4) width: f32,
+  @location(5) params: vec2f,
 }
 
 @vertex
@@ -22,21 +32,137 @@ fn vs_main(input: VertexInput) -> VertexOutput {
   var output: VertexOutput;
   output.position = vec4f(input.position, 0.0, 1.0);
   output.color = input.color;
+  output.world_pos = input.world_pos;
+  output.pA = input.pA;
+  output.pB = input.pB;
+  output.width = input.width;
+  output.params = input.params;
   return output;
 }
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4f {
-  return input.color;
+  if (input.params.x == 0.0) {
+    return input.color;
+  }
+  
+  if (input.params.x == 2.0) {
+    let p = input.world_pos - input.pA;
+    let cosR = cos(-input.params.y);
+    let sinR = sin(-input.params.y);
+    let lp = vec2f(p.x * cosR - p.y * sinR, p.x * sinR + p.y * cosR);
+    let ab = input.pB;
+    let pAbs = abs(lp);
+    
+    let l = length(pAbs / max(ab, vec2f(0.0001)));
+    let dist = (l - 1.0) * length(pAbs) / max(l, 0.0001);
+    
+    let stroke_dist = abs(dist);
+    let radius = input.width * 0.5;
+    let fw = fwidth(stroke_dist);
+    let alpha = smoothstep(radius + fw, radius - fw, stroke_dist);
+    
+    if (alpha < 0.01) { discard; }
+    return vec4f(input.color.rgb, input.color.a * alpha);
+  }
+  
+  let pa = input.world_pos - input.pA;
+  let ba = input.pB - input.pA;
+  let ba2 = dot(ba, ba);
+  let h = clamp(dot(pa, ba) / max(ba2, 0.0000001), 0.0, 1.0);
+  let dist = length(pa - ba * h);
+  
+  let radius = input.width * 0.5;
+  let fw = fwidth(dist);
+  let alpha = smoothstep(radius + fw, radius - fw, dist);
+  
+  if (alpha < 0.01) {
+    discard;
+  }
+  
+  return vec4f(input.color.rgb, input.color.a * alpha);
+}
+`;
+
+const MESH_SHADER_SOURCE = `
+struct VertexInput {
+  @location(0) position: vec3f,
+  @location(1) normal: vec3f,
+  @location(2) color: vec4f,
+}
+
+struct VertexOutput {
+  @builtin(position) position: vec4f,
+  @location(0) normal: vec3f,
+  @location(1) color: vec4f,
+}
+
+@vertex
+fn vs_main(input: VertexInput) -> VertexOutput {
+  var output: VertexOutput;
+  // Position is assumed to be pre-projected or handled via uniforms in the future
+  // For now, we just pass z and w=1
+  output.position = vec4f(input.position.x, input.position.y, input.position.z, 1.0);
+  output.normal = input.normal;
+  output.color = input.color;
+  return output;
+}
+
+@fragment
+fn fs_main(input: VertexOutput) -> @location(0) vec4f {
+  // Simple directional lighting
+  let lightDir = normalize(vec3f(0.5, 0.8, 0.3));
+  let n = normalize(input.normal);
+  let diffuse = max(dot(n, lightDir), 0.0);
+  let ambient = 0.3;
+  let finalColor = input.color.rgb * (ambient + diffuse * 0.7);
+  return vec4f(finalColor, input.color.a);
 }
 `;
 
 // MARK: - Constants
 
-const FLOATS_PER_VERTEX = 6; // x, y, r, g, b, a
-const BYTES_PER_VERTEX = FLOATS_PER_VERTEX * 4; // 24 bytes
-const CIRCLE_SEGMENTS = 48;
+const FLOATS_PER_VERTEX = 15; // x, y, wpX, wpY, pAx, pAy, pBx, pBy, w, r, g, b, a, type, rot
+const BYTES_PER_VERTEX = FLOATS_PER_VERTEX * 4; // 60 bytes
+const CIRCLE_SEGMENTS = 128;
 const CLEAR_COLOR = { r: 0.08, g: 0.09, b: 0.11, a: 1.0 };
+
+class VertexArray {
+  constructor(initialCapacity = 16384) {
+    this.capacity = initialCapacity;
+    this.buffer = new Float32Array(this.capacity * FLOATS_PER_VERTEX);
+    this.count = 0;
+  }
+
+  ensure(additionalVertices) {
+    if (this.count + additionalVertices > this.capacity) {
+      let newCapacity = this.capacity;
+      while (this.count + additionalVertices > newCapacity) newCapacity *= 2;
+      const newBuffer = new Float32Array(newCapacity * FLOATS_PER_VERTEX);
+      newBuffer.set(this.buffer.subarray(0, this.count * FLOATS_PER_VERTEX));
+      this.buffer = newBuffer;
+      this.capacity = newCapacity;
+    }
+  }
+
+  push(x, y, wpX, wpY, ax, ay, bx, by, w, r, g, b, a, type, rot) {
+    this.ensure(1);
+    let i = this.count * FLOATS_PER_VERTEX;
+    const b_ = this.buffer;
+    b_[i++] = x; b_[i++] = y;
+    b_[i++] = wpX; b_[i++] = wpY;
+    b_[i++] = ax; b_[i++] = ay;
+    b_[i++] = bx; b_[i++] = by;
+    b_[i++] = w;
+    b_[i++] = r; b_[i++] = g; b_[i++] = b; b_[i++] = a;
+    b_[i++] = type; b_[i++] = rot;
+    this.count++;
+  }
+  
+  clear() {
+    this.count = 0;
+  }
+}
 
 // MARK: - WebGPURenderer
 
@@ -83,7 +209,12 @@ export class WebGPURenderer {
           arrayStride: BYTES_PER_VERTEX,
           attributes: [
             { shaderLocation: 0, offset: 0, format: 'float32x2' },   // position
-            { shaderLocation: 1, offset: 8, format: 'float32x4' },   // color
+            { shaderLocation: 1, offset: 8, format: 'float32x2' },   // world_pos
+            { shaderLocation: 2, offset: 16, format: 'float32x2' },  // pA
+            { shaderLocation: 3, offset: 24, format: 'float32x2' },  // pB
+            { shaderLocation: 4, offset: 32, format: 'float32' },    // width
+            { shaderLocation: 5, offset: 36, format: 'float32x4' },  // color
+            { shaderLocation: 6, offset: 52, format: 'float32x2' },  // params
           ],
         }],
       },
@@ -128,6 +259,8 @@ export class WebGPURenderer {
     // Vertex buffer management
     this.vertexBuffer = null;
     this.vertexCapacity = 0;
+    this.pathVertexBuffer = null;
+    this.pathVertexCapacity = 0;
 
     // Camera settings
     this.cameraCenter = { x: 0, y: -0.45 };
@@ -152,15 +285,18 @@ export class WebGPURenderer {
   render(primitives) {
     this._resizeCanvas();
 
-    const vertices = this._buildVertices(primitives);
-    if (vertices.length === 0) return;
+    if (!this.meshVertices) this.meshVertices = new VertexArray();
+    if (!this.pathVertices) this.pathVertices = new VertexArray();
 
-    this._ensureVertexBuffer(vertices.length);
-    if (!this.vertexBuffer) return;
+    this.meshVertices.clear();
+    this.pathVertices.clear();
 
-    // Upload vertex data
-    const data = new Float32Array(vertices);
-    this.queue.writeBuffer(this.vertexBuffer, 0, data);
+    this._buildMeshVertices(primitives, this.meshVertices);
+    this._buildPathVertices(primitives, this.pathVertices);
+    if (this.meshVertices.count === 0 && this.pathVertices.count === 0) return;
+
+    const meshBuffer = this._uploadVertices(this.meshVertices, 'mesh');
+    const pathBuffer = this._uploadVertices(this.pathVertices, 'path');
 
     // Create command encoder and render pass
     const encoder = this.device.createCommandEncoder();
@@ -176,8 +312,8 @@ export class WebGPURenderer {
     });
 
     pass.setPipeline(this.pipeline);
-    pass.setVertexBuffer(0, this.vertexBuffer);
-    pass.draw(vertices.length / FLOATS_PER_VERTEX);
+    this._drawUploadedVertices(pass, meshBuffer, this.meshVertices);
+    this._drawUploadedVertices(pass, pathBuffer, this.pathVertices);
     pass.end();
 
     this.queue.submit([encoder.finish()]);
@@ -369,35 +505,55 @@ export class WebGPURenderer {
 
   /**
    * Ensures the vertex buffer is large enough.
-   * @param {number} floatCount - Required number of floats.
+   * @param {VertexArray} vertexArray
    * @private
    */
-  _ensureVertexBuffer(floatCount) {
-    if (floatCount <= this.vertexCapacity) return;
+  _uploadVertices(vertexArray, kind = 'mesh') {
+    if (vertexArray.count === 0) return null;
+    const floatCount = vertexArray.count * FLOATS_PER_VERTEX;
+    const buffer = this._ensureVertexBuffer(floatCount, kind);
+    if (!buffer) return null;
 
-    let capacity = Math.max(1024, this.vertexCapacity);
+    this.queue.writeBuffer(buffer, 0, vertexArray.buffer.subarray(0, floatCount));
+    return buffer;
+  }
+
+  _drawUploadedVertices(pass, buffer, vertexArray) {
+    if (!buffer || vertexArray.count === 0) return;
+    pass.setVertexBuffer(0, buffer);
+    pass.draw(vertexArray.count);
+  }
+
+  _ensureVertexBuffer(floatCount, kind = 'mesh') {
+    const bufferKey = kind === 'path' ? 'pathVertexBuffer' : 'vertexBuffer';
+    const capacityKey = kind === 'path' ? 'pathVertexCapacity' : 'vertexCapacity';
+
+    if (floatCount <= this[capacityKey]) return this[bufferKey];
+
+    let capacity = Math.max(1024, this[capacityKey]);
     while (capacity < floatCount) {
       capacity *= 2;
     }
-    this.vertexCapacity = capacity;
+    this[capacityKey] = capacity;
 
-    this.vertexBuffer = this.device.createBuffer({
+    this[bufferKey] = this.device.createBuffer({
       size: capacity * 4, // 4 bytes per float
       usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
+    return this[bufferKey];
   }
 
   /**
    * Builds the flat vertex array from primitives.
    * @param {Array} primitives
-   * @returns {number[]}
+   * @param {VertexArray} vertices
    * @private
    */
-  _buildVertices(primitives) {
-    const vertices = [];
+  _buildMeshVertices(primitives, vertices) {
     const screenMax = Math.max(this._cameraWidth, this._cameraHeight);
 
     for (const prim of primitives) {
+      if (prim.type === 'path') continue;
       const strokeWidth = prim.strokeWidth !== undefined ? (Math.min(10, Math.max(0, prim.strokeWidth)) / 100.0) * screenMax : 0;
 
       switch (prim.type) {
@@ -431,7 +587,90 @@ export class WebGPURenderer {
         case 'wall':
           this._appendWall(vertices, prim.start, prim.end, prim.spacing, prim.face, prim.strokeColor || prim.color);
           break;
+        case 'rect':
+          if (prim.strokeColor && prim.strokeColor.a > 0 && strokeWidth > 0) {
+            // we'd need _appendStrokeRect or polyline, let's use polyline for rect stroke
+            const w2 = prim.width / 2;
+            const h2 = prim.height / 2;
+            const cosR = Math.cos(prim.rotation || 0);
+            const sinR = Math.sin(prim.rotation || 0);
+            const pts = [
+              { x: -w2, y: -h2, z: 0 }, { x: w2, y: -h2, z: 0 },
+              { x: w2, y: h2, z: 0 }, { x: -w2, y: h2, z: 0 }
+            ].map(p => ({
+              x: prim.center.x + p.x * cosR - p.y * sinR,
+              y: prim.center.y + p.x * sinR + p.y * cosR,
+              z: prim.center.z
+            }));
+            this._appendPolyline(vertices, pts, strokeWidth, prim.strokeColor, true, prim.strokeStyle);
+          }
+          if (prim.color && prim.color.a > 0) {
+            const w2 = prim.width / 2;
+            const h2 = prim.height / 2;
+            const cosR = Math.cos(prim.rotation || 0);
+            const sinR = Math.sin(prim.rotation || 0);
+            const pts = [
+              { x: -w2, y: -h2, z: 0 }, { x: w2, y: -h2, z: 0 },
+              { x: w2, y: h2, z: 0 }, { x: -w2, y: h2, z: 0 }
+            ].map(p => ({
+              x: prim.center.x + p.x * cosR - p.y * sinR,
+              y: prim.center.y + p.x * sinR + p.y * cosR,
+              z: prim.center.z
+            }));
+            this._appendPolygon(vertices, pts, prim.color);
+          }
+          break;
+        case 'polygon':
+          if (prim.strokeColor && prim.strokeColor.a > 0 && strokeWidth > 0) {
+            this._appendPolyline(vertices, prim.points, strokeWidth, prim.strokeColor, true, prim.strokeStyle);
+          }
+          if (prim.color && prim.color.a > 0) {
+            this._appendPolygon(vertices, prim.points, prim.color);
+          }
+          break;
+        case 'arc':
+          if (prim.strokeColor && prim.strokeColor.a > 0 && strokeWidth > 0) {
+             // Basic arc stroke approximation using ellipse points
+             const delta = prim.endAngle - prim.startAngle;
+             const steps = 32;
+             const pts = [];
+             for (let i = 0; i <= steps; i++) {
+                const angle = prim.startAngle + delta * (i / steps);
+                pts.push({
+                   x: prim.center.x + Math.cos(angle) * prim.radius,
+                   y: prim.center.y + Math.sin(angle) * prim.radius,
+                   z: prim.center.z || 0
+                });
+             }
+             this._appendPolyline(vertices, pts, strokeWidth, prim.strokeColor, false, prim.strokeStyle);
+          }
+          // Arcs are usually just strokes, but if filled, it's a pie slice
+          if (prim.color && prim.color.a > 0) {
+             const delta = prim.endAngle - prim.startAngle;
+             const steps = 32;
+             const pts = [prim.center];
+             for (let i = 0; i <= steps; i++) {
+                const angle = prim.startAngle + delta * (i / steps);
+                pts.push({
+                   x: prim.center.x + Math.cos(angle) * prim.radius,
+                   y: prim.center.y + Math.sin(angle) * prim.radius,
+                   z: prim.center.z || 0
+                });
+             }
+             this._appendPolygon(vertices, pts, prim.color);
+          }
+          break;
       }
+    }
+  }
+
+  _buildPathVertices(primitives, vertices) {
+    const screenMax = Math.max(this._cameraWidth, this._cameraHeight);
+
+    for (const prim of primitives) {
+      if (prim.type !== 'path') continue;
+      const strokeWidth = prim.strokeWidth !== undefined ? (Math.min(10, Math.max(0, prim.strokeWidth)) / 100.0) * screenMax : 0;
+      this._appendVectorPath(vertices, prim, strokeWidth);
     }
 
     return vertices;
@@ -442,7 +681,304 @@ export class WebGPURenderer {
    * @private
    */
 
+  _appendVectorPath(vertices, prim, styleStrokeWidth) {
+    const contours = Array.isArray(prim.contours) ? prim.contours : [];
+    const drawing = prim.drawing || 'fill';
+    const fillColor = prim.color;
+    const strokeColor = prim.strokeColor || prim.color;
+    const pathStrokeWidth = Math.max(0, prim.pathStrokeWidth || 0.02);
+    const windingMode = prim.windingMode || 'non_zero';
+    const closedContours = [];
+
+    for (const contour of contours) {
+      const points = Array.isArray(contour.points) ? contour.points : [];
+      if (points.length < 2) continue;
+
+      const closed = !!contour.closed;
+      if (drawing === 'stroke' || !closed) {
+        if (strokeColor && strokeColor.a > 0) {
+          this._appendPolyline(vertices, points, pathStrokeWidth, strokeColor, closed, prim.strokeStyle);
+        }
+        continue;
+      }
+
+      closedContours.push(this._cleanPolygon(points));
+    }
+
+    if (drawing === 'fill' && fillColor && fillColor.a > 0) {
+      this._appendWindingPathFill(vertices, closedContours, fillColor, windingMode);
+    }
+
+    if (drawing === 'fill') {
+      for (const points of closedContours) {
+        if (points.length < 2) continue;
+        const closed = points.length > 2;
+        if (prim.strokeColor && prim.strokeColor.a > 0 && styleStrokeWidth > 0) {
+          this._appendPolyline(vertices, points, styleStrokeWidth, prim.strokeColor, true, prim.strokeStyle);
+        }
+      }
+    }
+  }
+
+  _appendWindingPathFill(vertices, closedContours, fillColor, windingMode) {
+    const edges = [];
+    for (const contour of closedContours) {
+      for (let i = 0; i < contour.length; i++) {
+        const p0 = contour[i];
+        const p1 = contour[(i + 1) % contour.length];
+        if (Math.abs(p0.y - p1.y) < 1e-7) continue;
+
+        let dir = p1.y > p0.y ? 1 : -1;
+        edges.push({
+          y0: p0.y,
+          y1: p1.y,
+          dir: dir,
+          m: (p1.x - p0.x) / (p1.y - p0.y),
+          c: p0.x - p0.y * (p1.x - p0.x) / (p1.y - p0.y)
+        });
+      }
+    }
+
+    const criticalYs = new Set();
+    for (const edge of edges) {
+      criticalYs.add(edge.y0);
+      criticalYs.add(edge.y1);
+    }
+
+    for (let i = 0; i < edges.length; i++) {
+      for (let j = i + 1; j < edges.length; j++) {
+        const e1 = edges[i];
+        const e2 = edges[j];
+
+        const minY1 = Math.min(e1.y0, e1.y1);
+        const maxY1 = Math.max(e1.y0, e1.y1);
+        const minY2 = Math.min(e2.y0, e2.y1);
+        const maxY2 = Math.max(e2.y0, e2.y1);
+
+        if (maxY1 <= minY2 || maxY2 <= minY1) continue;
+        if (Math.abs(e1.m - e2.m) < 1e-7) continue;
+
+        const yInt = (e2.c - e1.c) / (e1.m - e2.m);
+
+        if (yInt > minY1 + 1e-7 && yInt < maxY1 - 1e-7 &&
+            yInt > minY2 + 1e-7 && yInt < maxY2 - 1e-7) {
+          criticalYs.add(yInt);
+        }
+      }
+    }
+
+    const sortedYs = Array.from(criticalYs).sort((a, b) => a - b);
+    const uniqueYs = [];
+    for (const y of sortedYs) {
+      if (uniqueYs.length === 0 || y - uniqueYs[uniqueYs.length - 1] > 1e-6) {
+        uniqueYs.push(y);
+      }
+    }
+
+    for (let i = 0; i < uniqueYs.length - 1; i++) {
+      const yTop = uniqueYs[i];
+      const yBottom = uniqueYs[i + 1];
+      const yMid = (yTop + yBottom) / 2;
+
+      const activeEdges = [];
+      for (const edge of edges) {
+        const minY = Math.min(edge.y0, edge.y1);
+        const maxY = Math.max(edge.y0, edge.y1);
+        if (minY <= yMid && maxY >= yMid) {
+          activeEdges.push(edge);
+        }
+      }
+
+      if (activeEdges.length === 0) continue;
+
+      for (const edge of activeEdges) {
+        edge.xMid = edge.m * yMid + edge.c;
+      }
+
+      activeEdges.sort((a, b) => a.xMid - b.xMid);
+
+      let winding = 0;
+      let inside = false;
+      let leftEdge = null;
+
+      for (let j = 0; j < activeEdges.length; j++) {
+        const edge = activeEdges[j];
+        winding += edge.dir;
+
+        let isInside = false;
+        if (windingMode === 'even_odd') {
+          isInside = (winding % 2) !== 0;
+        } else {
+          isInside = winding !== 0;
+        }
+
+        const nextEdge = activeEdges[j + 1];
+        if (nextEdge && Math.abs(nextEdge.xMid - edge.xMid) < 1e-7) {
+          continue;
+        }
+
+        if (isInside && !inside) {
+          inside = true;
+          leftEdge = edge;
+        } else if (!isInside && inside) {
+          inside = false;
+          const rightEdge = edge;
+
+          const tlX = leftEdge.m * yTop + leftEdge.c;
+          const blX = leftEdge.m * yBottom + leftEdge.c;
+          const trX = rightEdge.m * yTop + rightEdge.c;
+          const brX = rightEdge.m * yBottom + rightEdge.c;
+
+          this._appendTriangle(vertices,
+            { x: tlX, y: yTop, z: 0 },
+            { x: trX, y: yTop, z: 0 },
+            { x: brX, y: yBottom, z: 0 },
+            fillColor
+          );
+          this._appendTriangle(vertices,
+            { x: tlX, y: yTop, z: 0 },
+            { x: brX, y: yBottom, z: 0 },
+            { x: blX, y: yBottom, z: 0 },
+            fillColor
+          );
+        }
+      }
+    }
+  }
+
+  _appendPolyline(vertices, points, width, color, closed = false, style = 'solid') {
+    if (points.length < 2) return;
+    for (let i = 0; i < points.length - 1; i++) {
+      this._appendStrokeLine(vertices, points[i], points[i + 1], width, color, style);
+    }
+    if (closed && points.length > 2) {
+      this._appendStrokeLine(vertices, points[points.length - 1], points[0], width, color, style);
+    }
+  }
+
+  _appendPolygon(vertices, points, color) {
+    const polygon = this._cleanPolygon(points);
+    if (polygon.length < 3) return;
+
+    const triangles = this._triangulatePolygon(polygon);
+    if (triangles.length === 0) {
+      for (let i = 1; i < polygon.length - 1; i++) {
+        this._appendTriangle(vertices, polygon[0], polygon[i], polygon[i + 1], color);
+      }
+      return;
+    }
+
+    for (const triangle of triangles) {
+      this._appendTriangle(vertices, triangle[0], triangle[1], triangle[2], color);
+    }
+  }
+
+  _cleanPolygon(points) {
+    const cleaned = [];
+    for (const point of points) {
+      const previous = cleaned[cleaned.length - 1];
+      if (!previous || Math.hypot(point.x - previous.x, point.y - previous.y) > 0.000001) {
+        cleaned.push(point);
+      }
+    }
+    if (cleaned.length > 1) {
+      const first = cleaned[0];
+      const last = cleaned[cleaned.length - 1];
+      if (Math.hypot(first.x - last.x, first.y - last.y) <= 0.000001) {
+        cleaned.pop();
+      }
+    }
+    return cleaned;
+  }
+
+  _triangulatePolygon(points) {
+    const triangles = [];
+    const indices = points.map((_, i) => i);
+    const clockwise = this._polygonArea(points) < 0;
+    let guard = 0;
+
+    while (indices.length > 3 && guard < points.length * points.length) {
+      let earFound = false;
+      for (let i = 0; i < indices.length; i++) {
+        const prevIndex = indices[(i - 1 + indices.length) % indices.length];
+        const currentIndex = indices[i];
+        const nextIndex = indices[(i + 1) % indices.length];
+        const a = points[prevIndex];
+        const b = points[currentIndex];
+        const c = points[nextIndex];
+
+        if (!this._isConvex(a, b, c, clockwise)) continue;
+        if (this._triangleContainsAnyPoint(points, indices, prevIndex, currentIndex, nextIndex)) continue;
+
+        triangles.push(clockwise ? [a, c, b] : [a, b, c]);
+        indices.splice(i, 1);
+        earFound = true;
+        break;
+      }
+
+      if (!earFound) break;
+      guard++;
+    }
+
+    if (indices.length === 3) {
+      const a = points[indices[0]];
+      const b = points[indices[1]];
+      const c = points[indices[2]];
+      triangles.push(clockwise ? [a, c, b] : [a, b, c]);
+    }
+    return triangles;
+  }
+
+  _polygonArea(points) {
+    let area = 0;
+    for (let i = 0; i < points.length; i++) {
+      const a = points[i];
+      const b = points[(i + 1) % points.length];
+      area += a.x * b.y - b.x * a.y;
+    }
+    return area * 0.5;
+  }
+
+  _isConvex(a, b, c, clockwise) {
+    const cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    return clockwise ? cross < -0.000001 : cross > 0.000001;
+  }
+
+  _triangleContainsAnyPoint(points, indices, ai, bi, ci) {
+    const a = points[ai];
+    const b = points[bi];
+    const c = points[ci];
+    for (const index of indices) {
+      if (index === ai || index === bi || index === ci) continue;
+      if (this._pointInTriangle(points[index], a, b, c)) return true;
+    }
+    return false;
+  }
+
+  _pointInTriangle(p, a, b, c) {
+    const area = (u, v, w) => (v.x - u.x) * (w.y - u.y) - (v.y - u.y) * (w.x - u.x);
+    const ab = area(a, b, p);
+    const bc = area(b, c, p);
+    const ca = area(c, a, p);
+    const hasNegative = ab < -0.000001 || bc < -0.000001 || ca < -0.000001;
+    const hasPositive = ab > 0.000001 || bc > 0.000001 || ca > 0.000001;
+    return !(hasNegative && hasPositive);
+  }
+
   _appendStrokeEllipse(vertices, center, major, minor, rotation, width, color, style = 'solid') {
+    if (style === 'solid') {
+      const expand = Math.max(major, minor) + width * 0.5 + Math.max(0.02, width * 0.2);
+      const s0 = { x: center.x - expand, y: center.y - expand, z: 0 };
+      const s1 = { x: center.x + expand, y: center.y - expand, z: 0 };
+      const s2 = { x: center.x + expand, y: center.y + expand, z: 0 };
+      const s3 = { x: center.x - expand, y: center.y + expand, z: 0 };
+
+      const pB = { x: major, y: minor, z: 0 };
+      this._appendTriangleEllipse(vertices, s0, s1, s2, color, center, pB, width, rotation);
+      this._appendTriangleEllipse(vertices, s0, s2, s3, color, center, pB, width, rotation);
+      return;
+    }
+
     const cosR = Math.cos(rotation);
     const sinR = Math.sin(rotation);
 
@@ -453,7 +989,7 @@ export class WebGPURenderer {
     // Approximate circumference
     const h = Math.pow(major - minor, 2) / Math.pow(major + minor, 2);
     const circumference = Math.PI * (major + minor) * (1 + (3 * h) / (10 + Math.sqrt(4 - 3 * h)));
-    const segments = style === 'solid' ? 64 : Math.max(64, Math.floor(circumference / (dashLength * 0.5)));
+    const segments = style === 'solid' ? 128 : Math.max(128, Math.floor(circumference / (dashLength * 0.5)));
 
     let currentDist = 0;
 
@@ -478,35 +1014,16 @@ export class WebGPURenderer {
       }
       currentDist += arcLen;
 
-      // normals
-      const len0 = Math.sqrt(Math.pow(major * Math.sin(a0), 2) + Math.pow(minor * Math.cos(a0), 2)) || 0.0001;
-      const nx0 = (minor * Math.cos(a0)) / len0;
-      const ny0 = (major * Math.sin(a0)) / len0;
-
-      const len1 = Math.sqrt(Math.pow(major * Math.sin(a1), 2) + Math.pow(minor * Math.cos(a1), 2)) || 0.0001;
-      const nx1 = (minor * Math.cos(a1)) / len1;
-      const ny1 = (major * Math.sin(a1)) / len1;
-
       // rotate
       const rx0 = x0 * cosR - y0 * sinR;
       const ry0 = x0 * sinR + y0 * cosR;
       const rx1 = x1 * cosR - y1 * sinR;
       const ry1 = x1 * sinR + y1 * cosR;
 
-      const rnx0 = nx0 * cosR - ny0 * sinR;
-      const rny0 = nx0 * sinR + ny0 * cosR;
-      const rnx1 = nx1 * cosR - ny1 * sinR;
-      const rny1 = nx1 * sinR + ny1 * cosR;
+      const p0 = { x: center.x + rx0, y: center.y + ry0, z: 0 };
+      const p1 = { x: center.x + rx1, y: center.y + ry1, z: 0 };
 
-      const halfW = width * 0.5;
-
-      const p0_out = { x: center.x + rx0 + rnx0 * halfW, y: center.y + ry0 + rny0 * halfW, z: 0 };
-      const p1_out = { x: center.x + rx1 + rnx1 * halfW, y: center.y + ry1 + rny1 * halfW, z: 0 };
-      const p0_in = { x: center.x + rx0 - rnx0 * halfW, y: center.y + ry0 - rny0 * halfW, z: 0 };
-      const p1_in = { x: center.x + rx1 - rnx1 * halfW, y: center.y + ry1 - rny1 * halfW, z: 0 };
-
-      this._appendTriangle(vertices, p0_in, p0_out, p1_out, color);
-      this._appendTriangle(vertices, p0_in, p1_out, p1_in, color);
+      this._appendLine(vertices, p0, p1, width, color);
     }
   }
 
@@ -574,7 +1091,7 @@ export class WebGPURenderer {
   }
 
   /**
-   * Appends a thick line as two triangles (quad).
+   * Appends a thick line as two triangles (quad) using SDF padding.
    * @private
    */
   _appendLine(vertices, start, end, width, color) {
@@ -583,16 +1100,21 @@ export class WebGPURenderer {
     const len = Math.sqrt(dx * dx + dy * dy);
     if (len < 0.0001) return;
 
-    const nx = (-dy / len) * (width * 0.5);
-    const ny = (dx / len) * (width * 0.5);
+    const expand = (width * 0.5) + Math.max(0.02, width * 0.2);
 
-    const s0 = { x: start.x + nx, y: start.y + ny, z: 0 };
-    const s1 = { x: start.x - nx, y: start.y - ny, z: 0 };
-    const e0 = { x: end.x + nx, y: end.y + ny, z: 0 };
-    const e1 = { x: end.x - nx, y: end.y - ny, z: 0 };
+    const nx = (-dy / len) * expand;
+    const ny = (dx / len) * expand;
 
-    this._appendTriangle(vertices, s0, s1, e0, color);
-    this._appendTriangle(vertices, e0, s1, e1, color);
+    const px = (dx / len) * expand;
+    const py = (dy / len) * expand;
+
+    const s0 = { x: start.x + nx - px, y: start.y + ny - py, z: 0 };
+    const s1 = { x: start.x - nx - px, y: start.y - ny - py, z: 0 };
+    const e0 = { x: end.x + nx + px, y: end.y + ny + py, z: 0 };
+    const e1 = { x: end.x - nx + px, y: end.y - ny + py, z: 0 };
+
+    this._appendTriangleSDF(vertices, s0, s1, e0, color, start, end, width);
+    this._appendTriangleSDF(vertices, e0, s1, e1, color, start, end, width);
   }
 
   /**
@@ -743,13 +1265,28 @@ export class WebGPURenderer {
     this._appendVertex(vertices, c, color);
   }
 
+  _appendTriangleEllipse(vertices, a, b, c, color, center, ab, width, rotation) {
+    this._appendVertex(vertices, a, color, a, center, ab, width, 2.0, rotation);
+    this._appendVertex(vertices, b, color, b, center, ab, width, 2.0, rotation);
+    this._appendVertex(vertices, c, color, c, center, ab, width, 2.0, rotation);
+  }
+
+  _appendTriangleSDF(vertices, a, b, c, color, pA, pB, width) {
+    this._appendVertex(vertices, a, color, a, pA, pB, width, 1.0, 0.0);
+    this._appendVertex(vertices, b, color, b, pA, pB, width, 1.0, 0.0);
+    this._appendVertex(vertices, c, color, c, pA, pB, width, 1.0, 0.0);
+  }
+
   /**
    * Appends a single vertex (projected to clip space).
    * @private
    */
-  _appendVertex(vertices, point, color) {
+  _appendVertex(vertices, point, color, worldPos = null, pA = null, pB = null, width = 0, type = 0.0, rotation = 0.0) {
     const clip = this._project(point);
-    vertices.push(clip.x, clip.y, color.r, color.g, color.b, color.a);
+    const wp = worldPos || point;
+    const a = pA || point;
+    const b = pB || point;
+    vertices.push(clip.x, clip.y, wp.x, wp.y, a.x, a.y, b.x, b.y, width, color.r, color.g, color.b, color.a, type, rotation);
   }
 
   /**

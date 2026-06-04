@@ -58,11 +58,11 @@ public extension HasHierarchy {
 			case .rect(let w, let h): childSize = SIMD2<Float>(w, h)
 			}
 		} else if let vector = entity.components[VectorComponent.self] {
-			switch vector.vector {
-			case .circle(let r): childSize = SIMD2<Float>(r * 2, r * 2)
-			case .ellipse(let major, let minor): childSize = SIMD2<Float>(major * 2, minor * 2)
-			case .rect(let w, let h): childSize = SIMD2<Float>(w, h)
-			default: break
+			if let bounds = vector.path.bounds() {
+				childSize = SIMD2<Float>(
+					bounds.max.x - bounds.min.x,
+					bounds.max.y - bounds.min.y
+				)
 			}
 		}
 		let scale = entity.transform?.scale ?? .one
