@@ -88,13 +88,11 @@ public class Line: Arrow {
 
 	public var length: Float {
 		get {
-			let d = _localTarget - _localStart
-			return sqrt(d.x * d.x + d.y * d.y + d.z * d.z)
+			return (_localTarget - _localStart).length
 		}
 		set {
 			let d = _localTarget - _localStart
-			let dist = sqrt(d.x * d.x + d.y * d.y + d.z * d.z)
-			let dir = dist == 0 ? SIMD3<Float>(0, -1, 0) : SIMD3<Float>(d.x / dist, d.y / dist, d.z / dist)
+			let dir = d.length > 0 ? d.normalized : SIMD3<Float>(0, -1, 0)
 			let newTarget = _localStart + dir * newValue
 			self.updatePoints(start: _localStart, target: newTarget)
 			self.vector = VectorComponent(vector: .line(
@@ -108,20 +106,20 @@ public class Line: Arrow {
 
 //MARK: Curve
 public class CurvedArrow: Arc {
-	public init(radius: Float, startAngle: Float, endAngle: Float, tipShape: ArrowShape? = .triangle, tailShape: ArrowShape? = nil) {
+	public override init(radius: Float, startAngle: Float, endAngle: Float) {
 		super.init(radius: radius, startAngle: startAngle, endAngle: endAngle)
 		// Curved arrow shares Arc geometry, but needs arrowheads. 
 		// For now we map it to arc vector.
 	}
 
-	public convenience init(at: SIMD3<Float>, target: SIMD3<Float>, radius: Float, largeArc: Bool = false, sweep: Bool = true, tipShape: ArrowShape? = .triangle, tailShape: ArrowShape? = nil) {
+	public convenience init(at: SIMD3<Float>, target: SIMD3<Float>, radius: Float, largeArc: Bool = false, sweep: Bool = true) {
 		let params = calculateArcParameters(at: at, target: target, radius: radius, largeArc: largeArc, sweep: sweep)
-		self.init(radius: params.actualRadius, startAngle: params.startAngle, endAngle: params.endAngle, tipShape: tipShape, tailShape: tailShape)
+		self.init(radius: params.actualRadius, startAngle: params.startAngle, endAngle: params.endAngle)
 		self.position = params.center
 	}
 
-	public convenience init(at: Anchor, target: Anchor, radius: Float, largeArc: Bool = false, sweep: Bool = true, tipShape: ArrowShape? = .triangle, tailShape: ArrowShape? = nil) {
-		self.init(at: at.resolve(), target: target.resolve(), radius: radius, largeArc: largeArc, sweep: sweep, tipShape: tipShape, tailShape: tailShape)
+	public convenience init(at: Anchor, target: Anchor, radius: Float, largeArc: Bool = false, sweep: Bool = true) {
+		self.init(at: at.resolve(), target: target.resolve(), radius: radius, largeArc: largeArc, sweep: sweep)
 	}
 	
 	public override init() {
