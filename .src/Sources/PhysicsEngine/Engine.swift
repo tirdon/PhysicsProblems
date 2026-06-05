@@ -10,24 +10,24 @@
 
 	public init() {}
 
-	@discardableResult
-	public init(_ callback: @escaping @MainActor (SceneWorld) async -> Void) {
+	private func makeScene() -> SceneWorld {
 		let scene = SceneWorld()
-		// Register built-in systems
 		scene.registerSystem(AnimationSystem.self)
 		scene.registerSystem(BoundingVisualizerSystem.self)
 		scenes.append(scene)
+		return scene
+	}
+
+	@discardableResult
+	public init(_ callback: @escaping @MainActor (SceneWorld) async -> Void) {
+		let scene = makeScene()
 		Task {
 			await callback(scene)
 		}
 	}
 
 	public func newScene() -> SceneWorld {
-		let scene = SceneWorld()
-		scene.registerSystem(AnimationSystem.self)
-		scene.registerSystem(BoundingVisualizerSystem.self)
-		scenes.append(scene)
-		return scene
+		makeScene()
 	}
 
 	/// Get the first (primary) scene

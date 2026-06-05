@@ -58,11 +58,8 @@ public struct Camera {
 	}
 
 	// Animation timeline
-	private var animationQueue: [AnimationClip] = []
-	private var currentClip: AnimationClipState?
+	public let timeline = Timeline()
 
-	private var waitContinuations: [CheckedContinuation<Void, Never>] = []
-	
 	private var pausedSystemTimers: [ObjectIdentifier: Float] = [:]
 	private var pauseContinuations: [ObjectIdentifier: [CheckedContinuation<Void, Never>]] = [:]
 
@@ -84,22 +81,28 @@ public struct Camera {
 		self.systems.insert(AnySystem(T()))
 	}
 
+	private func traverseEntities(_ visitor: (Entity) -> Void) {
+		func recurse(_ entity: Entity) {
+			visitor(entity)
+			if let group = entity as? Group {
+				for child in group.elements { recurse(child) }
+			} else if let hierarchy = entity as? HasHierarchy {
+				for child in hierarchy.children { recurse(child) }
+			}
+		}
+		for entity in entities {
+			recurse(entity)
+		}
+	}
+
 	// MARK: - Query
 
 	public func performQuery(_ query: EntityQuery) -> [Entity] {
 		var results = [Entity]()
-		func traverse(_ entity: Entity) {
+		traverseEntities { entity in
 			if query.predicate(entity) {
 				results.append(entity)
 			}
-			if let group = entity as? Group {
-				for child in group.elements { traverse(child) }
-			} else if let hierarchy = entity as? HasHierarchy {
-				for child in hierarchy.children { traverse(child) }
-			}
-		}
-		for entity in entities {
-			traverse(entity)
 		}
 		return results
 	}
@@ -149,52 +152,50 @@ public struct Camera {
 	// MARK: - Animation Timeline
 
 	public func play(_ clip: AnimationClip) {
-		animationQueue.append(clip)
+		timeline.enqueue(clip)
 	}
 
-	public func wait(second: Float = 1) async {
-		if second > 0 {
+	public func wait(seconds: Float = 1) async {
+		if seconds > 0 {
 			let delayClip = AnimationClip()
-			delayClip.addTrack(DelayTrack(duration: second))
-			animationQueue.append(delayClip)
+			delayClip.addTrack(DelayTrack(duration: seconds))
+			timeline.enqueue(delayClip)
 		}
 
-		if currentClip == nil && animationQueue.isEmpty {
+		if timeline.isIdle {
 			return
 		}
 		await withCheckedContinuation { continuation in
-			waitContinuations.append(continuation)
+			timeline.addWait(continuation)
+		}
+	}
+
+	public func delay(_ seconds: Float) {
+		if seconds > 0 {
+			let delayClip = AnimationClip()
+			delayClip.addTrack(DelayTrack(duration: seconds))
+			timeline.enqueue(delayClip)
+		}
+	}
+
+	public func run(_ action: @escaping @MainActor () -> Void) {
+		let actionClip = AnimationClip()
+		actionClip.addTrack(ActionTrack(action: action))
+		timeline.enqueue(actionClip)
+	}
+
+	public func setSystemPaused<S: System>(_ system: S.Type, paused: Bool) {
+		let id = ObjectIdentifier(S.self)
+		if paused {
+			pausedSystemTimers[id] = .infinity
+		} else {
+			pausedSystemTimers.removeValue(forKey: id)
 		}
 	}
 
 	/// Called by AnimationSystem each frame to drive animations
 	public func advanceAnimations(deltaTime: Float) {
-		// If no current clip, dequeue next
-		if currentClip == nil, !animationQueue.isEmpty {
-			let clip = animationQueue.removeFirst()
-			clip.begin(in: self)
-			currentClip = AnimationClipState(
-				clip: clip,
-				elapsed: 0
-			)
-		}
-
-		guard var state = currentClip else { return }
-
-		state.elapsed += deltaTime
-		state.clip.apply(at: state.elapsed)
-
-		if state.elapsed >= state.clip.duration {
-			currentClip = nil
-			if animationQueue.isEmpty {
-				for cont in waitContinuations {
-					cont.resume()
-				}
-				waitContinuations.removeAll()
-			}
-		} else {
-			currentClip = state
-		}
+		timeline.advance(deltaTime: deltaTime, in: self)
 	}
 
 	// MARK: - Input Handling
@@ -239,7 +240,7 @@ public struct Camera {
 	public func snapshot() -> SceneSnapshot {
 		var primitives: [RenderPrimitive] = []
 
-		func process(_ entity: Entity) {
+		traverseEntities { entity in
 			let style = effectiveStyle(for: entity)
 			if style.opacity > 0.001 {
 				if let vectorComponent = entity.components[VectorComponent.self] {
@@ -265,16 +266,6 @@ public struct Camera {
 					))
 				}
 			}
-			
-			if let group = entity as? Group {
-				for child in group.elements { process(child) }
-			} else if let hierarchy = entity as? HasHierarchy {
-				for child in hierarchy.children { process(child) }
-			}
-		}
-
-		for entity in entities {
-			process(entity)
 		}
 
 		return SceneSnapshot(primitives: primitives)
@@ -284,17 +275,7 @@ public struct Camera {
 
 	public func hitTest(_ point: SIMD3<Float>) -> Entity? {
 		var all: [Entity] = []
-		func traverse(_ entity: Entity) {
-			all.append(entity)
-			if let group = entity as? Group {
-				for child in group.elements { traverse(child) }
-			} else if let hierarchy = entity as? HasHierarchy {
-				for child in hierarchy.children { traverse(child) }
-			}
-		}
-		for entity in entities {
-			traverse(entity)
-		}
+		traverseEntities { all.append($0) }
 
 		for entity in all.reversed() {
 			guard let interaction = entity.interaction,
@@ -413,9 +394,3 @@ public struct Camera {
 
 }
 
-// MARK: - Animation State (private)
-
-private struct AnimationClipState {
-	let clip: AnimationClip
-	var elapsed: Float
-}

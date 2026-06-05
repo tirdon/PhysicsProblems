@@ -34,7 +34,7 @@ public struct AnySystem: Hashable {
 public struct SceneUpdateContext {
 	public let scene: SceneWorld
 	public let deltaTime: Float
-
+	
 	public init(scene: SceneWorld, deltaTime: Float) {
 		self.scene = scene
 		self.deltaTime = deltaTime
@@ -42,14 +42,6 @@ public struct SceneUpdateContext {
 }
 
 // MARK: - Built-in Systems
-
-public class PhysicsSystem: System {
-	required public init() {}
-
-	public func update(context: SceneUpdateContext) {
-		// Placeholder for physics simulation
-	}
-}
 
 /// Drives queued animations forward each frame
 public struct AnimationSystem: System {
@@ -69,13 +61,23 @@ public struct BoundingVisualizerSystem: System {
 		let scene = context.scene
 		for visual in scene.performQuery(.has(BoundingVisualizerComponent.self)) {
 			if let target = visual.components[BoundingVisualizerComponent.self]?.target {
+				visual.transform = target.transform
+				
 				let bounds = Entity.entityBounds(of: target)
 				let center = (bounds.min + bounds.max) / 2
-				visual.position = target.position + center
+				if let orientation = target.transform?.orientation {
+					visual.position = target.position + orientation.act(center)
+				} else {
+					visual.position = target.position + center
+				}
 				
 				let size = Entity.entitySize(of: target)
+				let scale = target.transform?.scale ?? .one
 				if var vector = visual.components[VectorComponent.self] {
-					vector.path = .rect(width: size.x, height: size.y)
+					vector.path = .rect(
+						width: scale.x == 0 ? 0 : size.x / scale.x,
+						height: scale.y == 0 ? 0 : size.y / scale.y
+					)
 					visual.components[VectorComponent.self] = vector
 				}
 			}

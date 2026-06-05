@@ -14,7 +14,7 @@ public struct RasterizedVectorContour {
 		self.isClosed = isClosed
 	}
 }
-
+//Subdivision
 public struct VectorPath {
 	public enum BooleanOperation {
 		case union
@@ -560,7 +560,7 @@ private extension VectorPath {
 		for current in polygon {
 			let crossesY = (current.y > point.y) != (previous.y > point.y)
 			if crossesY {
-				let x = (previous.x - current.x) * (point.y - current.y) / (previous.y - current.y + 0.000001) + current.x
+				let x = (previous.x - current.x) * (point.y - current.y) / (previous.y - current.y + epsilon) + current.x
 				if point.x < x {
 					isInside.toggle()
 				}
@@ -621,7 +621,7 @@ private extension VectorPath {
 
 	static func ellipsePoints(center: SIMD3<Float>, major: Float, minor: Float, rotation: Float, startAngle: Float, endAngle: Float, curveSteps: Int) -> [SIMD3<Float>] {
 		let delta = endAngle - startAngle
-		guard abs(delta) > 0.000001, major > 0, minor > 0 else { return [] }
+		guard abs(delta) > epsilon, major > 0, minor > 0 else { return [] }
 
 		let fullCircle = abs(abs(delta) - 2 * Float.pi) < 0.0001
 		let segmentCount = max(4, Int(ceil(abs(delta) / (2 * Float.pi) * Float(curveSteps))))
@@ -757,7 +757,7 @@ private extension VectorPath {
 			distances[index] = distances[index - 1] + source[index].distance(to: source[index - 1])
 		}
 		let totalLength = distances.last ?? 0
-		guard totalLength > 0.000001 else {
+		guard totalLength > epsilon else {
 			return Array(repeating: source[0], count: count)
 		}
 

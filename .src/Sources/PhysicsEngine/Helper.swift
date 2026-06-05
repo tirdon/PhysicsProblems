@@ -7,6 +7,8 @@
 
 import Foundation
 
+public let epsilon: Float = 0.000001
+
 // MARK: - Anchor
 
 public enum Anchor {
@@ -58,7 +60,7 @@ public extension SIMD3 where Scalar == Float {
 
 	var normalized: SIMD3<Float> {
 		let len = length
-		guard len > 0.000001 else { return .zero }
+		guard len > epsilon else { return .zero }
 		return self / len
 	}
 
@@ -94,7 +96,7 @@ public extension SIMD4 where Scalar == Float {
 
 	var inverse: SIMD4<Float> {
 		let lenSq = x*x + y*y + z*z + w*w
-		guard lenSq > 0.000001 else { return self }
+		guard lenSq > epsilon else { return self }
 		return conjugate / lenSq
 	}
 
@@ -172,7 +174,7 @@ public func clamp(_ value: Float, min minimum: Float, max maximum: Float) -> Flo
 public func distanceFromPointToSegment(_ point: SIMD3<Float>, _ start: SIMD3<Float>, _ end: SIMD3<Float>) -> Float {
 	let segment = end - start
 	let lengthSq = (segment * segment).sum()
-	guard lengthSq > 0.000001 else {
+	guard lengthSq > epsilon else {
 		return point.distance(to: start)
 	}
 	let diff = point - start

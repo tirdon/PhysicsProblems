@@ -16,9 +16,10 @@
     </div>
   </main>
 
-  <!-- Load WebGPU renderer and expose on global scope for Swift WASM -->
+  <!-- Load WebGPU renderer and Timeline controller, expose on global scope for Swift WASM -->
   <script type="module">
     import { WebGPURenderer } from './renderer.js';
+    import './timeline.js';
     // Make it available globally so Swift can access it via JSObject.global
     window.WebGPURenderer = WebGPURenderer;
   </script>

@@ -11,6 +11,9 @@ struct PhysicsProblems {
     @MainActor static var onMoveClosure: JSClosure?
     @MainActor static var onDownClosure: JSClosure?
     @MainActor static var onUpClosure: JSClosure?
+    @MainActor static var togglePauseClosure: JSClosure?
+    @MainActor static var seekClosure: JSClosure?
+    @MainActor static var setPausedClosure: JSClosure?
     static func main() {
         JavaScriptEventLoop.installGlobalExecutor()
         Task {
@@ -22,21 +25,24 @@ struct PhysicsProblems {
 
                 scene.play(pendulum.shift(1.i + 2.j, easing: .easeOut))
                 scene.play(pendulum.move(to: .origin, easing: .easeInOut))
-                await scene.wait()
-                
-				pendulum.first(where: { $0 is Circle })?.components[PendulumPhysicsComponent.self] = PendulumPhysicsComponent(
-					length: pendulum.string.length,
-                    baseAngle: 0,
-                    amplitude: 0.28,
-                    period: 2.4
-                )
+				await scene.wait()
+//                scene.run {
+                    pendulum.first(where: { $0 is Circle })?.components[PendulumPhysicsComponent.self] = PendulumPhysicsComponent(
+                        length: pendulum.string.length,
+                        baseAngle: 0,
+                        amplitude: 0.28,
+                        period: 2.4
+                    )
+                    pendulum.first(where: { $0 is Circle })?.interaction = InteractionComponent(
+                        hoverable: true, draggable: true, pauseAnimationOnHover: true
+                    )
+//                }
 				
-				pendulum.first(where: { $0 is Circle })?.interaction = InteractionComponent(
-					hoverable: true, draggable: true, pauseAnimationOnHover: true
-				)
-				
-				await scene.wait(second: 4)
+				scene.delay(4)
+//				scene.run {
+					pendulum.bob.color(.cyan)
 				await scene.pause(system: PendulumAnimationSystem.self)
+//				}
 				scene.play(pendulum.edge(to: .bottom, easing: .easeIn))
             }
 
@@ -51,6 +57,9 @@ struct PhysicsProblems {
 
                 // Install pointer handlers
                 installPointerHandlers(scene: primaryScene, renderer: renderer)
+
+                // Install timeline controller (keyframe clips, excludes system)
+                installTimelineController(scene: primaryScene, renderer: renderer)
 
                 // Start animation loop
                 startAnimationLoop(scene: primaryScene, renderer: renderer)
@@ -102,7 +111,7 @@ private func createJSRenderer(canvasID: String) async throws -> JSObject {
     if !renderer.setCamera.isUndefined {
         let cam = scene.camera
         let jsCam = makeJSObj([
-            ("position", makeJSObj([("x", cam.transform.position.x.jsValue), ("y", cam.transform.position.y.jsValue), ("z", cam.transform.position.z.jsValue)])),
+            ("position", vec3ToJS(cam.transform.position)),
             ("orientation", makeJSObj([("x", cam.transform.orientation.x.jsValue), ("y", cam.transform.orientation.y.jsValue), ("z", cam.transform.orientation.z.jsValue), ("w", cam.transform.orientation.w.jsValue)])),
             ("fov", Float64(cam.fov).jsValue)
         ])
@@ -112,6 +121,15 @@ private func createJSRenderer(canvasID: String) async throws -> JSObject {
     let snapshot = scene.snapshot()
     let jsArray = primitivesToJSArray(snapshot.primitives)
     _ = renderer.render!(jsArray)
+
+    // Send timeline state to JS (keyframe clips only, excludes system)
+    let tlState = scene.timeline.state
+    let jsTl = timelineStateToJS(tlState)
+    let global = JSObject.global
+    if let ctrl = global.TimelineController.object,
+       !ctrl.updateState.isUndefined {
+        _ = ctrl.updateState!(jsTl)
+    }
 }
 
 private func primitivesToJSArray(_ primitives: [RenderPrimitive]) -> JSValue {
@@ -132,7 +150,7 @@ private func primitivesToJSArray(_ primitives: [RenderPrimitive]) -> JSValue {
         case .circle(let center, let radius, let style):
             var props: [(String, JSValue)] = [
                 ("type", "circle".jsValue),
-                ("center", makeJSObj([("x", center.x.jsValue), ("y", center.y.jsValue), ("z", center.z.jsValue)])),
+                ("center", vec3ToJS(center)),
                 ("radius", Double(radius).jsValue)
             ]
             addStyle(&props, style: style)
@@ -141,7 +159,7 @@ private func primitivesToJSArray(_ primitives: [RenderPrimitive]) -> JSValue {
         case .ellipse(let center, let major, let minor, let rotation, let style):
             var props: [(String, JSValue)] = [
                 ("type", "ellipse".jsValue),
-                ("center", makeJSObj([("x", center.x.jsValue), ("y", center.y.jsValue), ("z", center.z.jsValue)])),
+                ("center", vec3ToJS(center)),
                 ("major", Double(major).jsValue),
                 ("minor", Double(minor).jsValue),
                 ("rotation", Double(rotation).jsValue)
@@ -152,8 +170,8 @@ private func primitivesToJSArray(_ primitives: [RenderPrimitive]) -> JSValue {
         case .line(let start, let end, let width, let style):
             var props: [(String, JSValue)] = [
                 ("type", "line".jsValue),
-                ("start", makeJSObj([("x", start.x.jsValue), ("y", start.y.jsValue), ("z", start.z.jsValue)])),
-                ("end", makeJSObj([("x", end.x.jsValue), ("y", end.y.jsValue), ("z", end.z.jsValue)])),
+                ("start", vec3ToJS(start)),
+                ("end", vec3ToJS(end)),
                 ("width", Double(width).jsValue)
             ]
             addStyle(&props, style: style)
@@ -162,8 +180,8 @@ private func primitivesToJSArray(_ primitives: [RenderPrimitive]) -> JSValue {
         case .arrow(let start, let end, let shaftWidth, let headLength, let headWidth, let tipShape, let tailShape, let style):
             var props: [(String, JSValue)] = [
                 ("type", "arrow".jsValue),
-                ("start", makeJSObj([("x", start.x.jsValue), ("y", start.y.jsValue), ("z", start.z.jsValue)])),
-                ("end", makeJSObj([("x", end.x.jsValue), ("y", end.y.jsValue), ("z", end.z.jsValue)])),
+                ("start", vec3ToJS(start)),
+                ("end", vec3ToJS(end)),
                 ("shaftWidth", Double(shaftWidth).jsValue),
                 ("headLength", Double(headLength).jsValue),
                 ("headWidth", Double(headWidth).jsValue)
@@ -176,7 +194,7 @@ private func primitivesToJSArray(_ primitives: [RenderPrimitive]) -> JSValue {
         case .rect(let center, let width, let height, let rotation, let style):
             var props: [(String, JSValue)] = [
                 ("type", "rect".jsValue),
-                ("center", makeJSObj([("x", center.x.jsValue), ("y", center.y.jsValue), ("z", center.z.jsValue)])),
+                ("center", vec3ToJS(center)),
                 ("width", Double(width).jsValue),
                 ("height", Double(height).jsValue),
                 ("rotation", Double(rotation).jsValue)
@@ -185,7 +203,7 @@ private func primitivesToJSArray(_ primitives: [RenderPrimitive]) -> JSValue {
             array.append(makeJSObj(props))
             
         case .polygon(let points, let style):
-            let pointsArr = points.map { makeJSObj([("x", $0.x.jsValue), ("y", $0.y.jsValue), ("z", $0.z.jsValue)]) }
+            let pointsArr = points.map { vec3ToJS($0) }
             var props: [(String, JSValue)] = [
                 ("type", "polygon".jsValue),
                 ("points", pointsArr.jsValue)
@@ -196,7 +214,7 @@ private func primitivesToJSArray(_ primitives: [RenderPrimitive]) -> JSValue {
         case .arc(let center, let radius, let startAngle, let endAngle, let style):
             var props: [(String, JSValue)] = [
                 ("type", "arc".jsValue),
-                ("center", makeJSObj([("x", center.x.jsValue), ("y", center.y.jsValue), ("z", center.z.jsValue)])),
+                ("center", vec3ToJS(center)),
                 ("radius", Double(radius).jsValue),
                 ("startAngle", Double(startAngle).jsValue),
                 ("endAngle", Double(endAngle).jsValue)
@@ -207,19 +225,17 @@ private func primitivesToJSArray(_ primitives: [RenderPrimitive]) -> JSValue {
         case .wall(let start, let end, let spacing, let face, let style):
             var props: [(String, JSValue)] = [
                 ("type", "wall".jsValue),
-                ("start", makeJSObj([("x", start.x.jsValue), ("y", start.y.jsValue), ("z", start.z.jsValue)])),
-                ("end", makeJSObj([("x", end.x.jsValue), ("y", end.y.jsValue), ("z", end.z.jsValue)])),
+                ("start", vec3ToJS(start)),
+                ("end", vec3ToJS(end)),
                 ("spacing", Double(spacing).jsValue),
-                ("face", makeJSObj([("x", face.x.jsValue), ("y", face.y.jsValue), ("z", face.z.jsValue)]))
+                ("face", vec3ToJS(face))
             ]
             addStyle(&props, style: style)
             array.append(makeJSObj(props))
 
         case .path(let contours, let drawing, let windingMode, let style):
             let contoursArray = contours.map { contour in
-                let pointsArray = contour.points.map {
-                    makeJSObj([("x", $0.x.jsValue), ("y", $0.y.jsValue), ("z", $0.z.jsValue)])
-                }
+                let pointsArray = contour.points.map { vec3ToJS($0) }
                 return makeJSObj([
                     ("points", pointsArray.jsValue),
                     ("closed", contour.isClosed.jsValue)
@@ -241,8 +257,8 @@ private func primitivesToJSArray(_ primitives: [RenderPrimitive]) -> JSValue {
             array.append(makeJSObj(props))
             
         case .mesh(let vertices, let normals, let indices, let shading, let style):
-            let vArr = vertices.map { makeJSObj([("x", $0.x.jsValue), ("y", $0.y.jsValue), ("z", $0.z.jsValue)]) }
-            let nArr = normals.map { makeJSObj([("x", $0.x.jsValue), ("y", $0.y.jsValue), ("z", $0.z.jsValue)]) }
+            let vArr = vertices.map { vec3ToJS($0) }
+            let nArr = normals.map { vec3ToJS($0) }
             let iArr = indices.map { Double($0).jsValue }
             var props: [(String, JSValue)] = [
                 ("type", "mesh".jsValue),
@@ -265,6 +281,10 @@ private func colorToJS(_ color: Color) -> JSValue {
         ("b", Double(color.b).jsValue),
         ("a", Double(color.a).jsValue)
     ])
+}
+
+private func vec3ToJS(_ v: SIMD3<Float>) -> JSValue {
+    makeJSObj([("x", v.x.jsValue), ("y", v.y.jsValue), ("z", v.z.jsValue)])
 }
 
 private func makeJSObj(_ entries: [(String, JSValue)]) -> JSValue {
@@ -292,35 +312,21 @@ private func makeJSObj(_ entries: [(String, JSValue)]) -> JSValue {
 }
 
 @MainActor private func installPointerHandlers(scene: SceneWorld, renderer: JSObject) {
-    let onMove = JSClosure { arguments -> JSValue in
-        guard let pointObj = arguments.first?.object else { return .undefined }
-        let x = Float(pointObj.x.number ?? 0)
-        let y = Float(pointObj.y.number ?? 0)
-        scene.pointerMoved(to: SIMD3<Float>(x, y, 0))
-        updateCursor(scene: scene, renderer: renderer)
-        renderScene(scene, with: renderer)
-        return .undefined
+    func makePointerClosure(_ handler: @escaping (SceneWorld, SIMD3<Float>) -> Void) -> JSClosure {
+        JSClosure { arguments -> JSValue in
+            guard let pointObj = arguments.first?.object else { return .undefined }
+            let x = Float(pointObj.x.number ?? 0)
+            let y = Float(pointObj.y.number ?? 0)
+            handler(scene, SIMD3<Float>(x, y, 0))
+            updateCursor(scene: scene, renderer: renderer)
+            renderScene(scene, with: renderer)
+            return .undefined
+        }
     }
 
-    let onDown = JSClosure { arguments -> JSValue in
-        guard let pointObj = arguments.first?.object else { return .undefined }
-        let x = Float(pointObj.x.number ?? 0)
-        let y = Float(pointObj.y.number ?? 0)
-        scene.pointerDown(at: SIMD3<Float>(x, y, 0))
-        updateCursor(scene: scene, renderer: renderer)
-        renderScene(scene, with: renderer)
-        return .undefined
-    }
-
-    let onUp = JSClosure { arguments -> JSValue in
-        guard let pointObj = arguments.first?.object else { return .undefined }
-        let x = Float(pointObj.x.number ?? 0)
-        let y = Float(pointObj.y.number ?? 0)
-        scene.pointerUp(at: SIMD3<Float>(x, y, 0))
-        updateCursor(scene: scene, renderer: renderer)
-        renderScene(scene, with: renderer)
-        return .undefined
-    }
+    let onMove = makePointerClosure { $0.pointerMoved(to: $1) }
+    let onDown = makePointerClosure { $0.pointerDown(at: $1) }
+    let onUp = makePointerClosure { $0.pointerUp(at: $1) }
 
     PhysicsProblems.onMoveClosure = onMove
     PhysicsProblems.onDownClosure = onDown
@@ -333,7 +339,8 @@ private func makeJSObj(_ entries: [(String, JSValue)]) -> JSValue {
 
 @MainActor private func startAnimationLoop(scene: SceneWorld, renderer: JSObject) {
     let callback = JSClosure { arguments -> JSValue in
-        let deltaTime = Float(arguments.first?.number ?? 0)
+        let dt = Float(arguments.first?.number ?? 0)
+        let deltaTime = scene.timeline.isPaused ? 0 : dt
         scene.update(deltaTime: deltaTime)
         renderScene(scene, with: renderer)
         return .undefined
@@ -341,6 +348,70 @@ private func makeJSObj(_ entries: [(String, JSValue)]) -> JSValue {
 
     PhysicsProblems.animationClosure = callback
     _ = renderer.startAnimationLoop!(callback)
+}
+
+// MARK: - Timeline Bridge
+
+@MainActor private func installTimelineController(scene: SceneWorld, renderer: JSObject) {
+    let togglePause = JSClosure { _ -> JSValue in
+        scene.timeline.togglePause()
+        return scene.timeline.isPaused.jsValue
+    }
+
+    let seek = JSClosure { arguments -> JSValue in
+        let time = Float(arguments.first?.number ?? 0)
+        scene.timeline.seek(to: time, in: scene)
+        return .undefined
+    }
+
+    let setPaused = JSClosure { arguments -> JSValue in
+        let paused = arguments.first?.boolean ?? false
+        scene.timeline.setPaused(paused)
+        return .undefined
+    }
+
+    PhysicsProblems.togglePauseClosure = togglePause
+    PhysicsProblems.seekClosure = seek
+    PhysicsProblems.setPausedClosure = setPaused
+
+    let global = JSObject.global
+    // Merge onto existing object (timeline.js may have already set updateState)
+    let ctrl: JSObject
+    if let existing = global.TimelineController.object {
+        ctrl = existing
+    } else {
+        ctrl = global.Object.function!.new()
+    }
+    ctrl.togglePause = togglePause.jsValue
+    ctrl.seek = seek.jsValue
+    ctrl.setPaused = setPaused.jsValue
+    global.TimelineController = ctrl.jsValue
+}
+
+private func timelineStateToJS(_ state: TimelineState) -> JSValue {
+    let clipsJS = state.clips.map { clip -> JSValue in
+        let tracksJS = clip.tracks.map { track -> JSValue in
+            let kfTimes = track.keyframeTimes.map { Double($0).jsValue }
+            return makeJSObj([
+                ("keyPath", track.keyPath.jsValue),
+                ("duration", Double(track.duration).jsValue),
+                ("keyframeTimes", kfTimes.jsValue)
+            ])
+        }
+        return makeJSObj([
+            ("index", Double(clip.index).jsValue),
+            ("startTime", Double(clip.startTime).jsValue),
+            ("duration", Double(clip.duration).jsValue),
+            ("tracks", tracksJS.jsValue),
+            ("isCurrent", clip.isCurrent.jsValue)
+        ])
+    }
+    return makeJSObj([
+        ("clips", clipsJS.jsValue),
+        ("totalDuration", Double(state.totalDuration).jsValue),
+        ("currentTime", Double(state.currentTime).jsValue),
+        ("isPaused", state.isPaused.jsValue)
+    ])
 }
 
 // MARK: - JSError Helper

@@ -22,13 +22,12 @@ public struct Color: Equatable, Sendable {
         Color(r: r, g: g, b: b, a: a * opacity)
     }
 	
-	public var darker: Color {
-		Color(r: max(0, r * 0.8), g: max(0, g * 0.8), b: max(0, b * 0.8), a: a)
+	public func adjusted(by factor: Float) -> Color {
+		Color(r: max(0, min(1, r * factor)), g: max(0, min(1, g * factor)), b: max(0, min(1, b * factor)), a: a)
 	}
 	
-	public var lighter: Color {
-		Color(r: min(1, r * 1.2), g: min(1, g * 1.2), b: min(1, b * 1.2), a: a)
-	}
+	public var darker: Color { adjusted(by: 0.8) }
+	public var lighter: Color { adjusted(by: 1.2) }
 	
 	public var highlight: Color {
 		// Neonize: boost brightness and add a bright tint

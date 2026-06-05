@@ -190,14 +190,6 @@ public struct RevealOnHoverComponent: Component {
 	}
 }
 
-public struct RevealOnTapComponent: Component {
-	public var trigger: Entity
-
-	public init(trigger: Entity) {
-		self.trigger = trigger
-	}
-}
-
 public struct PhysicsBodyComponent: Component {
 	public enum Shape {
 		case circle(radius: Float)
@@ -213,10 +205,6 @@ public struct PhysicsBodyComponent: Component {
 		self.shape = shape
 		self.offset = offset
 	}
-}
-
-public struct PhysicsMotionComponent: Component {
-	public init() {}
 }
 
 public struct BoundingVisualizerComponent: Component {

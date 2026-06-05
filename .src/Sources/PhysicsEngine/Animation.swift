@@ -33,6 +33,7 @@ public enum Easing {
 	case custom(@Sendable (Float) -> Float)
 	
 	public func apply(_ t: Float) -> Float {
+		let elasticC4 = (2 * Float.pi) / 3
 		switch self {
 		case .linear:
 			return t
@@ -58,11 +59,9 @@ public enum Easing {
 		case .expo:
 			return t == 0 ? 0 : (t == 1 ? 1 : (t < 0.5 ? pow(2, 20 * t - 10) / 2 : (2 - pow(2, -20 * t + 10)) / 2))
 		case .easeInElastic:
-			let c4 = (2 * Float.pi) / 3
-			return t == 0 ? 0 : (t == 1 ? 1 : -pow(2, 10 * t - 10) * sin((t * 10 - 10.75) * c4))
+			return t == 0 ? 0 : (t == 1 ? 1 : -pow(2, 10 * t - 10) * sin((t * 10 - 10.75) * elasticC4))
 		case .easeOutElastic:
-			let c4 = (2 * Float.pi) / 3
-			return t == 0 ? 0 : (t == 1 ? 1 : pow(2, -10 * t) * sin((t * 10 - 0.75) * c4) + 1)
+			return t == 0 ? 0 : (t == 1 ? 1 : pow(2, -10 * t) * sin((t * 10 - 0.75) * elasticC4) + 1)
 		case .wiggle(let oscillations):
 			return sin(t * Float.pi * 2 * oscillations)
 		case .bounce:
@@ -91,12 +90,14 @@ public enum Easing {
 @MainActor public protocol AnimationTrack {
 	var duration: Float { get }
 	var easing: Easing { get }
+	var keyPath: String { get }
 	func begin(in scene: SceneWorld)
 	func apply(at time: Float)
 }
 
 public extension AnimationTrack {
 	var easing: Easing { .smooth }
+	var keyPath: String { String(describing: type(of: self)) }
 }
 
 //MARK: - Clip
@@ -144,13 +145,15 @@ extension AnimationClip: @preconcurrency CustomDebugStringConvertible {
 	public let duration: Float
 	public var keyframes: [Keyframe<Value>]
 	public let easing: Easing
+	public let keyPath: String
 	private let interpolate: (Value, Value, Float) -> Value
 	private let applyValue: (Entity, Value) -> Void
 
-	public init(entity: Entity, duration: Float, easing: Easing = .smooth, keyframes: [Keyframe<Value>] = [], interpolate: @escaping (Value, Value, Float) -> Value, applyValue: @escaping (Entity, Value) -> Void) {
+	public init(entity: Entity, duration: Float, easing: Easing = .smooth, keyPath: String = "keyframe", keyframes: [Keyframe<Value>] = [], interpolate: @escaping (Value, Value, Float) -> Value, applyValue: @escaping (Entity, Value) -> Void) {
 		self.entity = entity
 		self.duration = duration
 		self.easing = easing
+		self.keyPath = keyPath
 		self.keyframes = keyframes.sorted { $0.time < $1.time }
 		self.interpolate = interpolate
 		self.applyValue = applyValue
@@ -196,6 +199,7 @@ extension AnimationClip: @preconcurrency CustomDebugStringConvertible {
 	public let entity: Entity
 	public let duration: Float
 	public let easing: Easing
+	public let keyPath: String = "position"
 	public var startPosition: SIMD3<Float> = .zero
 	public var endPosition: SIMD3<Float> = .zero
 
@@ -241,6 +245,7 @@ extension AnimationClip: @preconcurrency CustomDebugStringConvertible {
 
 @MainActor public class DelayTrack: AnimationTrack {
 	public let duration: Float
+	public let keyPath: String = "delay"
 
 	public init(duration: Float) {
 		self.duration = duration
@@ -289,6 +294,7 @@ extension AnimationClip: @preconcurrency CustomDebugStringConvertible {
 	public let entity: Entity
 	public let duration: Float
 	public let easing: Easing
+	public let keyPath: String = "scale"
 	public let targetScale: SIMD3<Float>
 	public let isRelative: Bool
 	public var startScale: SIMD3<Float> = .one
@@ -329,6 +335,7 @@ extension AnimationClip: @preconcurrency CustomDebugStringConvertible {
 	public let entity: Entity
 	public let duration: Float
 	public let easing: Easing
+	public let keyPath: String = "rotation"
 	public let targetOrientation: SIMD4<Float>
 	public let isRelative: Bool
 	public let pivot: Anchor?
@@ -375,6 +382,28 @@ extension AnimationClip: @preconcurrency CustomDebugStringConvertible {
 			entity.transform = transform
 		} else {
 			entity.transform = TransformComponent(orientation: currentOrientation)
+		}
+	}
+}
+
+@MainActor public class ActionTrack: AnimationTrack {
+	public let duration: Float = 0
+	public let keyPath: String = "action"
+	private let action: @MainActor () -> Void
+	private var hasRun = false
+
+	public init(action: @escaping @MainActor () -> Void) {
+		self.action = action
+	}
+
+	public func begin(in scene: SceneWorld) {
+		hasRun = false
+	}
+
+	public func apply(at time: Float) {
+		if time >= 0 && !hasRun {
+			hasRun = true
+			action()
 		}
 	}
 }

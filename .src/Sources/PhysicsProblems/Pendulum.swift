@@ -15,7 +15,7 @@ class Pendulum: Group {
 
 	public override init(elements: [Entity] = []) {
 		let p = Wall().color(.blue)
-		let s = Line(start: p.midX * .i, end: -4.j).color(.white)
+		let s = Line(start: p.visualBounds.midX * .i, end: -4.j).color(.white)
 		s.next(to: p, relative: .bottom)
 		
 		let b = Circle().color(.red)
@@ -25,7 +25,7 @@ class Pendulum: Group {
 		self.string = s
 		self.bob = b
 		
-		super.init(elements: [b, s, p, b.createVisualBounds()])
+		super.init(elements: [b, s, p, b.visualBounds])
 	}
 }
 
